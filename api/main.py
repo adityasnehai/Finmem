@@ -201,7 +201,7 @@ def get_state():
             "fed_rate":       round(state.fed_rate, 2),
             "yield_spread":   round(state.yield_spread, 2),
             "unemployment":   round(state.unemployment, 1),
-            "regime":         predict_state_regime(state),
+            "regime":         predict_state_regime(state) or "UNKNOWN",
         },
         "episodes":   episodes,
         "confidence": round(result.confidence, 3),
@@ -367,9 +367,9 @@ def list_all_episodes(
 
     df_ep = df_ep.head(limit)
     rows = []
-    for _, row in df_ep.iterrows():
+    for idx, row in df_ep.iterrows():
         rows.append({
-            "id": str(row["id"]) if "id" in row.index else _,
+            "id": str(row["id"]) if "id" in row.index else str(idx),
             "start_date": str(row["start_date"]),
             "end_date": str(row["end_date"]),
             "regime": row["regime"],
@@ -669,7 +669,8 @@ def get_outcomes_distribution(regime: str | None = Query(None)):
     if regime is not None:
         df_ep = df_ep[df_ep["regime"] == regime.upper()]
 
-    returns = [_safe_float(r) * 100 for r in df_ep["spy_return_6m_after"] if pd.notna(r)]
+    # Exclude sentinel 0.0 values (stored when 6m window hasn't closed yet)
+    returns = [_safe_float(r) * 100 for r in df_ep["spy_return_6m_after"] if pd.notna(r) and abs(float(r)) > 1e-6]
     drawdowns = [_safe_float(d) * 100 for d in df_ep["max_drawdown"] if pd.notna(d)]
 
     if not returns:
@@ -682,7 +683,7 @@ def get_outcomes_distribution(regime: str | None = Query(None)):
     regime_stats = {}
     for r in df_ep["regime"].unique():
         regime_df = df_ep[df_ep["regime"] == r]
-        regime_returns = [_safe_float(ret) * 100 for ret in regime_df["spy_return_6m_after"] if pd.notna(ret)]
+        regime_returns = [_safe_float(ret) * 100 for ret in regime_df["spy_return_6m_after"] if pd.notna(ret) and abs(float(ret)) > 1e-6]
         if regime_returns:
             regime_stats[r] = {
                 "mean": float(np.mean(regime_returns)),

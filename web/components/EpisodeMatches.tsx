@@ -21,8 +21,8 @@ const rc = (regime: string) => REGIME_COLORS[regime] ?? REGIME_COLORS.STABLE;
 export default function EpisodeMatches({ episodes, confidence }: {
   episodes: Episode[]; confidence: number;
 }) {
-  const confLabel = confidence >= 0.65 ? "HIGH CONFIDENCE" : confidence >= 0.45 ? "MODERATE" : "LOW";
-  const confColor = confidence >= 0.65 ? "#0f9d7a" : confidence >= 0.45 ? "#d97706" : "#dc2626";
+  const confLabel = confidence >= 0.27 ? "HIGH CONFIDENCE" : confidence >= 0.15 ? "MODERATE" : "LOW";
+  const confColor = confidence >= 0.27 ? "#0f9d7a" : confidence >= 0.15 ? "#d97706" : "#dc2626";
 
   return (
     <div className="flex h-full flex-col gap-4 rounded-[28px] border border-emerald-100/80 bg-white/92 p-5 shadow-[0_24px_55px_-34px_rgba(15,23,42,0.16)]">
@@ -75,8 +75,8 @@ export default function EpisodeMatches({ episodes, confidence }: {
 
         {episodes.length === 0 && (
           <div className="flex flex-col items-center justify-center py-10 gap-2">
-            <span className="text-sm text-slate-500">No episodes in memory</span>
-            <span className="text-xs tracking-[0.12em] text-slate-400">Run: make ingest</span>
+            <span className="text-sm text-slate-500">No historical analogs found</span>
+            <span className="text-xs text-slate-400">The memory database may still be loading</span>
           </div>
         )}
       </div>
