@@ -137,25 +137,145 @@ Large language models hallucinate financial history. They fabricate dates, misre
 
 ---
 
-## Features
+## Features & Analysis
 
-### Today's Analog
-Compares today's market state against all historical episodes and surfaces the top 5 most similar periods with similarity scores and the forward returns that followed.
+### 1. Today's Analog — Live Market Fingerprinting
 
-### Episode Browser
-Full searchable database of all detected market episodes. Filter by regime, date, or keyword. Each episode shows macro conditions at entry, total return, max drawdown, and 1m / 3m / 6m SPY forward returns.
+The dashboard shows today's 8 live market indicators pulled from yfinance and FRED:
 
-### Chat
-Free-form questions about market history. Every answer is generated strictly from retrieved episodes — the system prompt forbids the LLM from using knowledge outside retrieved context. Confidence score shown per response.
+| Indicator | What it measures | How to read it |
+|---|---|---|
+| SPY price | S&P 500 ETF current price | Daily change shown as Δ% |
+| 21-day return | 1-month momentum | Positive = uptrend, negative = downtrend |
+| 5-day return | Short-term momentum (1 week) | Quick pulse check |
+| VIX | Market fear gauge (implied volatility) | <20 calm, 20–30 stressed, >30 crisis |
+| CPI (YoY) | Inflation year-over-year | Fed target ~2%; >4% considered high |
+| Fed rate | Federal Funds overnight rate | High = tightening, low = easing |
+| Yield spread (10Y−2Y) | Curve shape | Negative = inverted = recession warning |
+| Unemployment | Labour market | <4% healthy, >6% weakening |
 
-### Analytics
-Retrieval quality benchmark comparing three systems — FinMem RAG vs. Recency Window (90d) vs. No Retrieval. PCA compression ablation on stored embeddings.
+These 8 signals are converted into a 519-dim vector and matched against every historical episode in the database. The **top 5 most similar historical periods** are returned with:
+- **Similarity score** — how closely that period matches today (20–40% is a strong match across 30+ years)
+- **Episode return** — what SPY did during that period (start to end)
+- **6-month forward return** — what SPY did in the 6 months *after* the episode ended — the base rate for what history suggests may follow
 
-### Insights
-Regime transition matrix with historical probabilities. Precursor frequency analysis — which signals (VIX spike, yield inversion, Fed tightening) preceded each regime shift.
+> The 6-month forward return is the most useful number. It is computed from actual SPY closing prices, not estimated.
 
-### Episode Compare
-Side-by-side comparison of any two episodes across all features and forward returns.
+---
+
+### 2. Episode Browser — Searchable Market History
+
+Every detected episode is stored with full context. Filters available:
+- **By regime** — STABLE, BULL, CRISIS, SELLOFF, TIGHTENING, TIGHTENING+SLOWDOWN, EASING+RECOVERY
+- **By date range**
+- **By text search** — searches prose summaries
+
+Each episode card shows:
+- Date range + duration
+- Macro conditions at episode start (VIX, CPI, Fed rate, yield spread, unemployment)
+- Total SPY return during the episode
+- Max drawdown
+- 1-month, 3-month, 6-month SPY forward returns after episode ended
+
+Episodes that ended within the last 6 months show "Not yet available" for forward returns — this is correct, not an error.
+
+---
+
+### 3. Chat — Grounded Historical Q&A
+
+Ask free-form questions about market history. Examples:
+- *"What happened after yield curve inversions deeper than −0.30%?"*
+- *"Find episodes where VIX exceeded 30 and the Fed was cutting rates"*
+- *"What is the closest analog to the 2020 COVID crash?"*
+- *"How did markets behave 6 months after CPI peaked above 8%?"*
+
+**How it works:**
+1. Your question is used to build a market-state query vector
+2. The 5 most similar episodes are retrieved
+3. GPT-4o is given *only* those 5 episodes as context — no outside knowledge allowed
+4. Every response cites its source episodes by date range and similarity score
+5. A confidence score (0–1) is shown for each response
+
+**Confidence gate:**
+- Score ≥ 0.27 → answers freely
+- Score 0.15–0.27 → answers with "moderate confidence" warning
+- Score < 0.15 → refuses and says "no confident analog found" rather than hallucinating
+
+Chat history is saved locally in your browser.
+
+---
+
+### 4. Analytics — Retrieval Quality Benchmarking
+
+Three metrics evaluated and compared across three systems:
+
+**Systems compared:**
+| System | Description |
+|---|---|
+| FinMem (Episodic RAG) | Full pipeline: PELT episodes + HMM regimes + hybrid embedding + whitening |
+| Recency Window (90d) | Baseline: use only the last 90 days of data as context |
+| No Retrieval | Baseline: send question to GPT-4o with no historical context |
+
+**Metrics:**
+| Metric | What it measures |
+|---|---|
+| Quality score (0–3) | LLM-graded response quality: factual accuracy, relevance, citation |
+| Grounded % | Percentage of responses that cite a source episode |
+| Latency p50 / p95 | Retrieval + generation time in milliseconds |
+
+**Retrieval Calibration (leave-one-out):**
+For each stored episode, uses its nearest neighbor to predict 6-month SPY direction. Measures:
+- Directional accuracy (did retrieval predict up/down correctly?)
+- Brier score (probability calibration)
+- MAE (mean absolute error on return prediction)
+- ECE (expected calibration error)
+
+**Embedding Compression:**
+Measures Recall@K at each PCA compression level (from full 519-dim down to low-dim). Shows how much retrieval quality is preserved under dimension reduction.
+
+**Outcome Distribution:**
+Histograms of 6-month forward returns and max drawdowns across all episodes, filterable by regime.
+
+**Regime Distribution:**
+Pie chart of episode counts by regime — shows how much history falls into each macro state.
+
+---
+
+### 5. Research Insights — Pattern Analysis
+
+**Precursor Frequency Analysis:**
+For each regime transition (e.g. STABLE → CRISIS), shows how often each indicator appeared in the 20-day window before the transition:
+- VIX spike frequency
+- Yield curve inversion frequency
+- Fed tightening frequency
+- Fed easing frequency
+
+Use this to understand what signals historically preceded each type of regime shift.
+
+**Regime Transition Matrix:**
+Shows the empirical probability of moving from one regime to another, computed from actual historical episode boundaries. For example: after a CRISIS regime, what fraction of the time did the market transition to EASING+RECOVERY vs. SELLOFF?
+
+---
+
+### 6. Episode Compare — Side-by-Side Analysis
+
+Select any two episodes from the database and compare them across:
+- All macro conditions at episode start
+- Total return, max drawdown
+- 1m / 3m / 6m forward returns
+- Whether regimes match or differ
+
+Useful for understanding whether two superficially similar periods actually had different macro drivers.
+
+---
+
+### 7. Data Quality Dashboard
+
+Shows completeness of the episode database:
+- Total episodes by regime
+- Date range covered
+- Field completeness percentages (which macro fields have full coverage)
+- Last updated timestamp
 
 ---
 
