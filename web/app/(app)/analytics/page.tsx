@@ -159,8 +159,8 @@ export default function AnalyticsPage() {
   useEffect(() => {
     Promise.all([
       fetchAblation(),
-      fetchMemory(),
-      fetchOutcomesDistribution(),
+      fetchMemory().catch(() => null),
+      fetchOutcomesDistribution().catch(() => null),
       fetchCalibration().catch(() => ({ available: false })),
       fetchCompression().catch(() => ({ available: false })),
     ])
