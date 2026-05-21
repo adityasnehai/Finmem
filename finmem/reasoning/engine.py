@@ -59,8 +59,6 @@ def reason(result: QueryResult, user_query: str, stream: bool = True):
         for chunk in response:
             delta = chunk.choices[0].delta.content or ""
             full += delta
-            print(delta, end="", flush=True)
-        print()
         return full
     else:
         response = client.chat.completions.create(

@@ -327,9 +327,6 @@ function ThinkingBubble() {
   );
 }
 
-const REGIME_RE = /\[(STABLE|BULL|CRISIS|SELLOFF|TIGHTENING\+SLOWDOWN|TIGHTENING|EASING\+RECOVERY)\]/g;
-const BOLD_RE = /\*\*(.+?)\*\*/g;
-
 function inlineFormat(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   let last = 0;

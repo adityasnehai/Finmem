@@ -286,15 +286,16 @@ async def chat_stream(request: Request, req: ChatRequest):
     if not should_reason:
         async def no_analog():
             yield f"data: {json.dumps({'text': prefix, 'done': False})}\n\n"
-            yield f"data: {json.dumps({'done': True, 'confidence': result.confidence})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'confidence': result.confidence, 'latency_ms': result.latency_ms})}\n\n"
         return StreamingResponse(no_analog(), media_type="text/event-stream")
 
-    episode_context = "\n".join([
-        f"[{i+1}] {r.episode.start_date} → {r.episode.end_date} | {r.episode.regime} | sim {r.final_score:.2f}\n"
-        f"    {r.episode.prose_summary}\n"
-        f"    SPY 6m after: {r.episode.spy_return_6m_after:+.1%}" if r.episode.spy_return_6m_after else ""
-        for i, r in enumerate(result.retrieved)
-    ])
+    def _fmt_episode(i: int, r) -> str:
+        fwd = f"\n    SPY 6m after: {r.episode.spy_return_6m_after:+.1%}" if r.episode.spy_return_6m_after is not None else ""
+        return (
+            f"[{i+1}] {r.episode.start_date} → {r.episode.end_date} | {r.episode.regime} | sim {r.final_score:.2f}\n"
+            f"    {r.episode.prose_summary}{fwd}"
+        )
+    episode_context = "\n".join([_fmt_episode(i, r) for i, r in enumerate(result.retrieved)])
 
     system_prompt = (
         "You are FinMem, a financial historian with episodic memory of market history.\n"
