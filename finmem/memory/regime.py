@@ -87,7 +87,7 @@ def predict_state_regime(state) -> str:
         return "STABLE"
 
     obs = np.array([[
-        state.spy_return_21d,   # proxy for 1d return direction
+        state.spy_return_1d,    # must match training feature: daily return
         state.rolling_vol_21d,
         state.vix,
         state.cpi,
