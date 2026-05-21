@@ -51,6 +51,9 @@ def load_macro(start: str = START_DATE, end: str = END_DATE) -> pd.DataFrame:
     macro = pd.DataFrame(frames)
     macro.index = pd.to_datetime(macro.index).normalize()
     macro = macro.resample("D").last().ffill()
+    # Convert CPI level to YoY % change (annualized, as percentage)
+    macro["cpi"] = macro["cpi"].pct_change(252) * 100  # ~252 trading days ≈ 1 year
+    macro = macro.dropna(subset=["cpi"])
     return macro
 
 

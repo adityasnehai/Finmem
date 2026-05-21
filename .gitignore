@@ -1,6 +1,12 @@
+# Environment — never commit keys
 .env
+.env.local
+.env.*.local
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
 .venv/
 venv/
 *.egg-info/
@@ -8,8 +14,17 @@ dist/
 build/
 .pytest_cache/
 .ruff_cache/
-finmem_db/
+
+# Next.js
+web/.next/
+web/node_modules/
+web/out/
+
+# Test / notebook artifacts
 results/*.json
 notebooks/.ipynb_checkpoints/
 *.png
 *.pdf
+
+# finmem_db/ — intentionally tracked (committed after ingest)
+# hmm_regime.pkl — intentionally tracked (committed after ingest)

@@ -7,29 +7,10 @@ from openai import OpenAI
 from rich.console import Console
 from rich.progress import track
 from finmem.data.schemas import Episode
+from finmem.memory.regime import predict_sequence_regime
 
 console = Console()
 client  = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
-REGIME_RULES = [
-    (lambda r: r["vix_level"] > 35,                                      "CRISIS"),
-    (lambda r: r["vix_level"] > 25 and r["max_drawdown"] < -0.08,        "SELLOFF"),
-    (lambda r: r["cpi"] > 5 and r["fed_rate"] > 3,                       "TIGHTENING"),
-    (lambda r: r["yield_spread"] < -0.2 and r["fed_rate"] > 2,           "TIGHTENING+SLOWDOWN"),
-    (lambda r: r["fed_rate"] < 1 and r["avg_daily_return"] > 0,          "EASING+RECOVERY"),
-    (lambda r: r["avg_daily_return"] > 0.04 / 21 and r["vix_level"] < 20, "BULL"),
-    (lambda r: True,                                                       "STABLE"),
-]
-
-
-def _assign_regime(row: dict) -> str:
-    for condition, label in REGIME_RULES:
-        try:
-            if condition(row):
-                return label
-        except Exception:
-            continue
-    return "STABLE"
 
 
 def _compute_forward_returns(df: pd.DataFrame, end_idx: int) -> dict:
@@ -46,6 +27,7 @@ def _compute_forward_returns(df: pd.DataFrame, end_idx: int) -> dict:
 
 
 def _summarize_episode(ep: dict) -> str:
+    """Generate prose summary via GPT-4o-mini; falls back to template if quota exceeded."""
     prompt = (
         f"Write a 2-sentence factual summary of this market episode for a financial analyst. "
         f"Date range: {ep['start_date']} to {ep['end_date']}. "
@@ -60,21 +42,48 @@ def _summarize_episode(ep: dict) -> str:
         f"SPY 6m after: {ep.get('spy_return_6m_after', 'N/A')}. "
         f"Be factual and concise. No predictions, no opinions."
     )
-    resp = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=120,
-        temperature=0.2,
-    )
-    return resp.choices[0].message.content.strip()
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=120,
+            temperature=0.2,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        fwd = ep.get("spy_return_6m_after")
+        fwd_str = f"SPY returned {fwd:.1%} in the following 6 months." if fwd is not None else ""
+        return (
+            f"{ep['regime']} episode from {ep['start_date']} to {ep['end_date']} "
+            f"({ep['duration_days']} days). SPY returned {ep['total_return']:.1%} with max drawdown "
+            f"{ep['max_drawdown']:.1%}; VIX averaged {ep['vix_level']:.1f}, CPI {ep['cpi']:.1f}%, "
+            f"Fed funds {ep['fed_rate']:.2f}%. {fwd_str}"
+        )
 
 
-def build_episodes(df: pd.DataFrame, min_size: int = 15, n_bkps: int = 80) -> list[Episode]:
+def _select_pen(algo: rpt.Pelt, n_days: int, target_lo: int = 50, target_hi: int = 100) -> float:
+    """
+    Target-count pen selection: find the smallest penalty that keeps episode
+    count in [target_lo, target_hi]. For 8000+ trading days, 50-100 episodes
+    means one structural change every 3-8 months — semantically meaningful.
+    """
+    for pen in [1, 2, 3, 5, 8, 13, 21, 34]:
+        n = len(algo.predict(pen=pen)) - 1
+        if target_lo <= n <= target_hi:
+            return pen
+    # fallback: pen=3 reliably gives ~70 episodes on 8000-day datasets
+    return 3
+
+
+def build_episodes(df: pd.DataFrame, min_size: int = 15) -> list[Episode]:
     signal = df[["spy_return_1d", "rolling_vol_21d"]].fillna(0).values
 
-    console.print(f"[cyan]Running PELT changepoint detection (n_bkps={n_bkps})...[/cyan]")
-    algo   = rpt.Pelt(model="rbf", min_size=min_size).fit(signal)
-    bkps   = algo.predict(pen=3)
+    algo = rpt.Pelt(model="rbf", min_size=min_size).fit(signal)
+
+    pen = _select_pen(algo, len(signal))
+    n_bkps = len(algo.predict(pen=pen)) - 1
+    console.print(f"[cyan]PELT pen={pen} → {n_bkps} breakpoints[/cyan]")
+    bkps = algo.predict(pen=pen)
 
     boundaries = [0] + bkps
     episodes: list[Episode] = []
@@ -109,7 +118,7 @@ def build_episodes(df: pd.DataFrame, min_size: int = 15, n_bkps: int = 80) -> li
             "yield_spread":     float(chunk["yield_spread"].iloc[0]),
             "unemployment":     float(chunk["unemployment"].iloc[0]),
         }
-        ep_dict["regime"] = _assign_regime(ep_dict)
+        ep_dict["regime"] = predict_sequence_regime(df, chunk.index[0], chunk.index[-1])
         ep_dict.update(_compute_forward_returns(df, e_idx))
 
         ep_dict["prose_summary"] = _summarize_episode(ep_dict)

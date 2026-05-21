@@ -16,17 +16,6 @@ class MarketState(BaseModel):
     unemployment: float
     rolling_vol_21d: float
 
-    @property
-    def regime_label(self) -> str:
-        if self.vix > 30:
-            return "CRISIS"
-        if self.fed_rate > self.fed_rate and self.cpi > 4:
-            return "TIGHTENING"
-        if self.yield_spread < -0.2:
-            return "TIGHTENING+SLOWDOWN"
-        if self.spy_return_21d > 0.05:
-            return "RECOVERY"
-        return "STABLE"
 
 
 class Episode(BaseModel):

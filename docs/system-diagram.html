@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FinMem — System Architecture</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0B1D16;
+    color: #E2EFE9;
+    min-height: 100vh;
+    padding: 40px 32px 64px;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .header-tag {
+    display: inline-block;
+    background: #0FA77A22;
+    border: 1px solid #0FA77A55;
+    color: #0FA77A;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    padding: 4px 14px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+  }
+  .header h1 {
+    font-size: 36px;
+    font-weight: 700;
+    color: #EDFAF4;
+    letter-spacing: -.02em;
+    margin-bottom: 10px;
+  }
+  .header h1 span { color: #0FA77A; }
+  .header p {
+    color: #7AB8A0;
+    font-size: 15px;
+    max-width: 560px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* ── USP Strip ── */
+  .usp-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 40px;
+  }
+  .usp-card {
+    background: #112418;
+    border: 1px solid #1E3D2A;
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .usp-card .icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 10px;
+    font-size: 16px;
+  }
+  .usp-card h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #EDFAF4;
+    margin-bottom: 4px;
+  }
+  .usp-card p {
+    font-size: 11.5px;
+    color: #7AB8A0;
+    line-height: 1.5;
+  }
+
+  /* ── Main 3-column layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    gap: 20px;
+    align-items: start;
+  }
+
+  /* ── Side panels ── */
+  .side-panel {
+    background: #0F2218;
+    border: 1px solid #1E3D2A;
+    border-radius: 14px;
+    padding: 20px;
+  }
+  .side-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: #0FA77A;
+    margin-bottom: 18px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #1E3D2A;
+  }
+
+  /* stage boxes in side panels */
+  .stage {
+    background: #0B1D16;
+    border: 1px solid #1E3D2A;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+    position: relative;
+  }
+  .stage-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: #0FA77A;
+    margin-bottom: 4px;
+  }
+  .stage-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #EDFAF4;
+    margin-bottom: 4px;
+  }
+  .stage-detail {
+    font-size: 10.5px;
+    color: #7AB8A0;
+    line-height: 1.5;
+  }
+  .stage-badge {
+    display: inline-block;
+    background: #0FA77A22;
+    border: 1px solid #0FA77A44;
+    color: #0FA77A;
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-top: 5px;
+  }
+  .stage-badge.orange {
+    background: #F9731622;
+    border-color: #F9731644;
+    color: #F97316;
+  }
+  .stage-badge.teal {
+    background: #1AADB022;
+    border-color: #1AADB044;
+    color: #1AADB0;
+  }
+
+  .side-arrow {
+    text-align: center;
+    color: #1E3D2A;
+    font-size: 18px;
+    line-height: 1;
+    margin: 2px 0;
+  }
+
+  /* ── Center query flow ── */
+  .query-flow {
+    background: #0F2218;
+    border: 1px solid #1E3D2A;
+    border-radius: 14px;
+    padding: 24px;
+  }
+  .flow-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: #0FA77A;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #1E3D2A;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .live-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #0FA77A;
+    box-shadow: 0 0 0 3px #0FA77A33;
+  }
+
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 4px;
+  }
+  .flow-step-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 32px;
+  }
+  .step-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 1.5px solid #0FA77A55;
+    background: #0FA77A15;
+    color: #0FA77A;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-line {
+    width: 1.5px;
+    flex: 1;
+    background: linear-gradient(to bottom, #1E3D2A, transparent);
+    margin: 4px 0;
+    min-height: 16px;
+  }
+  .flow-step-body {
+    flex: 1;
+    padding-bottom: 16px;
+  }
+  .step-label {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: #0FA77A;
+    margin-bottom: 3px;
+  }
+  .step-card {
+    background: #0B1D16;
+    border: 1px solid #1E3D2A;
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .step-card h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #EDFAF4;
+    margin-bottom: 6px;
+  }
+  .step-card p {
+    font-size: 11.5px;
+    color: #7AB8A0;
+    line-height: 1.55;
+  }
+
+  /* query bubble */
+  .query-bubble {
+    background: #0FA77A18;
+    border: 1px solid #0FA77A44;
+    border-radius: 10px 10px 10px 2px;
+    padding: 11px 14px;
+    font-size: 13px;
+    color: #EDFAF4;
+    font-style: italic;
+    margin-bottom: 6px;
+  }
+  .query-bubble::before {
+    content: '"';
+    color: #0FA77A;
+    font-style: normal;
+    font-weight: 700;
+  }
+  .query-bubble::after {
+    content: '"';
+    color: #0FA77A;
+    font-style: normal;
+    font-weight: 700;
+  }
+
+  /* market state row */
+  .market-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 7px;
+  }
+  .chip {
+    background: #112418;
+    border: 1px solid #1E3D2A;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 10.5px;
+    color: #7AB8A0;
+  }
+  .chip span { color: #EDFAF4; font-weight: 600; }
+
+  /* whitening visual */
+  .whiten-visual {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .dist-box {
+    background: #112418;
+    border: 1px solid #1E3D2A;
+    border-radius: 8px;
+    padding: 8px;
+    text-align: center;
+  }
+  .dist-box .dist-label { font-size: 9px; color: #5A8A72; margin-bottom: 3px; }
+  .dist-box .dist-val { font-size: 12px; font-weight: 700; }
+  .dist-arrow { color: #0FA77A; font-size: 16px; text-align: center; }
+
+  /* similarity bars */
+  .sim-rows { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+  .sim-row {
+    display: flex; align-items: center; gap: 8px;
+    background: #112418;
+    border: 1px solid #1E3D2A;
+    border-radius: 8px;
+    padding: 7px 10px;
+  }
+  .sim-regime-badge {
+    font-size: 9px; font-weight: 700;
+    padding: 2px 6px; border-radius: 999px;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .sim-date { font-size: 10px; color: #7AB8A0; flex: 1; }
+  .sim-bar-wrap { width: 80px; background: #0B1D16; border-radius: 999px; height: 4px; }
+  .sim-bar { height: 4px; border-radius: 999px; background: #0FA77A; }
+  .sim-score { font-size: 10px; font-weight: 700; color: #EDFAF4; width: 32px; text-align: right; }
+  .sim-fwd { font-size: 10px; font-weight: 600; width: 44px; text-align: right; }
+
+  /* confidence gate */
+  .gate-row {
+    display: flex; gap: 8px; margin-top: 8px;
+  }
+  .gate-box {
+    flex: 1; border-radius: 8px; padding: 8px 10px; text-align: center;
+    border: 1px solid;
+  }
+  .gate-box .gate-val { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+  .gate-box .gate-lbl { font-size: 9px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+  .gate-box.high { background: #0FA77A15; border-color: #0FA77A44; }
+  .gate-box.high .gate-val, .gate-box.high .gate-lbl { color: #0FA77A; }
+  .gate-box.med { background: #F9731615; border-color: #F9731644; }
+  .gate-box.med .gate-val, .gate-box.med .gate-lbl { color: #F97316; }
+  .gate-box.low { background: #E2213415; border-color: #E2213444; }
+  .gate-box.low .gate-val, .gate-box.low .gate-lbl { color: #E22134; }
+  .gate-result {
+    margin-top: 8px;
+    background: #0FA77A15;
+    border: 1px solid #0FA77A33;
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 11px;
+    color: #0FA77A;
+    font-weight: 600;
+  }
+
+  /* answer bubble */
+  .answer-bubble {
+    background: #112418;
+    border: 1px solid #1E3D2A;
+    border-radius: 2px 10px 10px 10px;
+    padding: 12px 14px;
+    font-size: 11.5px;
+    color: #C8E6DA;
+    line-height: 1.65;
+    margin-bottom: 7px;
+  }
+  .answer-source {
+    font-size: 10px;
+    color: #5A8A72;
+    border-top: 1px solid #1E3D2A;
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+  .answer-source span { color: #0FA77A; font-weight: 600; }
+
+  /* meta row */
+  .meta-row {
+    display: flex; gap: 8px; margin-top: 8px;
+  }
+  .meta-chip {
+    background: #0B1D16;
+    border: 1px solid #1E3D2A;
+    border-radius: 6px;
+    padding: 4px 9px;
+    font-size: 10px;
+    color: #7AB8A0;
+  }
+  .meta-chip span { color: #0FA77A; font-weight: 700; }
+
+  /* ── Positioning section ── */
+  .positioning {
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .pos-card {
+    background: #0F2218;
+    border: 1px solid #1E3D2A;
+    border-radius: 14px;
+    padding: 22px;
+  }
+  .pos-card h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #0FA77A;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #1E3D2A;
+  }
+
+  table.vs { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  table.vs th {
+    text-align: left; padding: 6px 8px;
+    font-size: 9.5px; font-weight: 700;
+    letter-spacing: .12em; text-transform: uppercase;
+    color: #5A8A72;
+    border-bottom: 1px solid #1E3D2A;
+  }
+  table.vs td { padding: 7px 8px; border-bottom: 1px solid #0F2218; color: #7AB8A0; vertical-align: top; }
+  table.vs td:first-child { color: #EDFAF4; font-weight: 600; }
+  table.vs td .good { color: #0FA77A; }
+  table.vs td .bad { color: #E22134; }
+
+  .pos-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #0B1D16;
+    border: 1px solid #1E3D2A;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 11.5px;
+    color: #7AB8A0;
+    margin-bottom: 7px;
+    width: 100%;
+  }
+  .pos-pill .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #0FA77A; flex-shrink: 0;
+  }
+  .pos-pill .dot.red { background: #E22134; }
+  .pos-pill strong { color: #EDFAF4; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat-box {
+    background: #0B1D16;
+    border: 1px solid #1E3D2A;
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+  }
+  .stat-box .val { font-size: 22px; font-weight: 700; color: #0FA77A; }
+  .stat-box .lbl { font-size: 9.5px; color: #5A8A72; margin-top: 3px; line-height: 1.4; }
+
+  /* footer */
+  .footer {
+    margin-top: 36px;
+    text-align: center;
+    font-size: 10.5px;
+    color: #2A5040;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<div class="header">
+  <div class="header-tag">System Architecture · Query Flow · Positioning</div>
+  <h1>Fin<span>Mem</span></h1>
+  <p>Financial episodic memory — retrieves the most structurally similar market episodes from 33 years of history, cites sources, and refuses when uncertain.</p>
+</div>
+
+<!-- ── USP STRIP ── -->
+<div class="usp-strip">
+  <div class="usp-card">
+    <div class="icon" style="background:#0FA77A18;color:#0FA77A;">📚</div>
+    <h3>Episodic Memory, Not a Window</h3>
+    <p>PELT changepoint detection builds 72 structural episodes — not arbitrary 90-day slices. Each episode has a real regime meaning.</p>
+  </div>
+  <div class="usp-card">
+    <div class="icon" style="background:#1AADB018;color:#1AADB0;">🎯</div>
+    <h3>Cited, Grounded Answers</h3>
+    <p>Every response cites the specific historical episodes (with dates + similarity score) it was derived from. No hallucination.</p>
+  </div>
+  <div class="usp-card">
+    <div class="icon" style="background:#F9731618;color:#F97316;">📐</div>
+    <h3>Calibrated Confidence</h3>
+    <p>74.7% directional accuracy (leave-one-out). Refuses below 0.45 confidence threshold rather than generating low-quality answers.</p>
+  </div>
+  <div class="usp-card">
+    <div class="icon" style="background:#A78BFA18;color:#A78BFA;">🔬</div>
+    <h3>Research-Backed Retrieval</h3>
+    <p>All-but-the-top whitening (ICLR 2018) fixes embedding isotropy collapse. Compression ablation shows 84% recall@5 at 8-dims.</p>
+  </div>
+</div>
+
+<!-- ── MAIN 3-COLUMN LAYOUT ── -->
+<div class="main">
+
+  <!-- LEFT: Memory Store pipeline -->
+  <div class="side-panel">
+    <div class="side-title">Memory Store — built once</div>
+
+    <div class="stage">
+      <div class="stage-label">Data Sources</div>
+      <div class="stage-title">yfinance + FRED</div>
+      <div class="stage-detail">SPY OHLCV · VIX · CPI · Fed rate · 10Y-2Y yield · Unemployment</div>
+      <div class="stage-badge teal">8,228 trading days</div>
+    </div>
+    <div class="side-arrow">↓</div>
+
+    <div class="stage">
+      <div class="stage-label">Episode Detection</div>
+      <div class="stage-title">PELT Changepoint</div>
+      <div class="stage-detail">Detects structural breakpoints on (returns, vol) signal. Min episode: 15 days.</div>
+      <div class="stage-badge">72 episodes · 1993–2026</div>
+    </div>
+    <div class="side-arrow">↓</div>
+
+    <div class="stage">
+      <div class="stage-label">Regime Labeling</div>
+      <div class="stage-title">7 Regime Classes</div>
+      <div class="stage-detail">Rule-based: CRISIS · SELLOFF · TIGHTENING · TIGHTENING+SLOWDOWN · EASING+RECOVERY · BULL · STABLE</div>
+    </div>
+    <div class="side-arrow">↓</div>
+
+    <div class="stage">
+      <div class="stage-label">Embedding</div>
+      <div class="stage-title">391-dim Hybrid</div>
+      <div class="stage-detail">7-dim structural (×0.6) + 384-dim MiniLM-L6-v2 text (×0.4) → L2 normalize → all-but-the-top whitening</div>
+      <div class="stage-badge orange">ICLR 2018 fix</div>
+    </div>
+    <div class="side-arrow">↓</div>
+
+    <div class="stage">
+      <div class="stage-label">Vector Store</div>
+      <div class="stage-title">LanceDB</div>
+      <div class="stage-detail">72 episodes × 391-dim. Embedded, no server. GPT-4o-mini prose summaries per episode.</div>
+      <div class="stage-badge teal">~112 KB total</div>
+    </div>
+  </div>
+
+  <!-- CENTER: Live query flow -->
+  <div class="query-flow">
+    <div class="flow-title">
+      <div class="live-dot"></div>
+      Live Query Flow — example trace
+    </div>
+
+    <!-- Step 1: User query -->
+    <div class="flow-step">
+      <div class="flow-step-left">
+        <div class="step-num">1</div>
+        <div class="step-line"></div>
+      </div>
+      <div class="flow-step-body">
+        <div class="step-label">User Input</div>
+        <div class="step-card">
+          <h3>Natural-Language Query</h3>
+          <div class="query-bubble">What happened after yield curve inversions in prior tightening cycles?</div>
+          <p>Chat interface accepts free-form financial questions. No special syntax required.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Market state -->
+    <div class="flow-step">
+      <div class="flow-step-left">
+        <div class="step-num">2</div>
+        <div class="step-line"></div>
+      </div>
+      <div class="flow-step-body">
+        <div class="step-label">Market State Embedding</div>
+        <div class="step-card">
+          <h3>Current Conditions → 391-dim Vector</h3>
+          <p>Live market data fetched from yfinance + FRED, embedded using same hybrid encoder as stored episodes.</p>
+          <div class="market-chips">
+            <div class="chip">SPY <span>−3.2%</span></div>
+            <div class="chip">VIX <span>28.4</span></div>
+            <div class="chip">CPI <span>3.1%</span></div>
+            <div class="chip">Fed <span>4.33%</span></div>
+            <div class="chip">Yield <span>−0.12%</span></div>
+            <div class="chip">Unemp <span>4.1%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Whitening -->
+    <div class="flow-step">
+      <div class="flow-step-left">
+        <div class="step-num">3</div>
+        <div class="step-line"></div>
+      </div>
+      <div class="flow-step-body">
+        <div class="step-label">Isotropy Fix · All-but-the-Top (ICLR 2018)</div>
+        <div class="step-card">
+          <h3>Remove dominant PC → re-normalize</h3>
+          <p>Removes the global "financial episode" direction that made all episodes look identical. Embedding space becomes discriminative.</p>
+          <div class="whiten-visual">
+            <div class="dist-box">
+              <div class="dist-label">Before · random pair sim</div>
+              <div class="dist-val" style="color:#E22134;">0.867 ± 0.09</div>
+            </div>
+            <div class="dist-arrow">→</div>
+            <div class="dist-box">
+              <div class="dist-label">After · random pair sim</div>
+              <div class="dist-val" style="color:#0FA77A;">−0.04 ± 0.43</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4: Cosine search + reranking -->
+    <div class="flow-step">
+      <div class="flow-step-left">
+        <div class="step-num">4</div>
+        <div class="step-line"></div>
+      </div>
+      <div class="flow-step-body">
+        <div class="step-label">Cosine Search + Reranking</div>
+        <div class="step-card">
+          <h3>Top-20 candidates → rerank → top-5</h3>
+          <p>Cosine similarity vs all 72 whitened episode vectors. Reranked with +0.10 regime match bonus and −0.05 recency penalty (&gt;15 yr old episodes).</p>
+          <div class="sim-rows">
+            <div class="sim-row">
+              <span class="sim-regime-badge" style="background:#FBBF2422;color:#FBBF24;border:1px solid #FBBF2444;">TIGHTENING+SLOWDOWN</span>
+              <span class="sim-date">2006-11 → 2007-06</span>
+              <div class="sim-bar-wrap"><div class="sim-bar" style="width:71%;"></div></div>
+              <span class="sim-score">0.71</span>
+              <span class="sim-fwd" style="color:#E22134;">−28.4%</span>
+            </div>
+            <div class="sim-row">
+              <span class="sim-regime-badge" style="background:#1AADB022;color:#1AADB0;border:1px solid #1AADB044;">TIGHTENING</span>
+              <span class="sim-date">2000-03 → 2001-01</span>
+              <div class="sim-bar-wrap"><div class="sim-bar" style="width:68%;background:#1AADB0;"></div></div>
+              <span class="sim-score">0.68</span>
+              <span class="sim-fwd" style="color:#E22134;">−19.1%</span>
+            </div>
+            <div class="sim-row">
+              <span class="sim-regime-badge" style="background:#FBBF2422;color:#FBBF24;border:1px solid #FBBF2444;">TIGHTENING+SLOWDOWN</span>
+              <span class="sim-date">2019-08 → 2019-10</span>
+              <div class="sim-bar-wrap"><div class="sim-bar" style="width:65%;background:#F59B23;"></div></div>
+              <span class="sim-score">0.65</span>
+              <span class="sim-fwd" style="color:#0FA77A;">+14.8%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5: Confidence gate -->
+    <div class="flow-step">
+      <div class="flow-step-left">
+        <div class="step-num">5</div>
+        <div class="step-line"></div>
+      </div>
+      <div class="flow-step-body">
+        <div class="step-label">Confidence Gate</div>
+        <div class="step-card">
+          <h3>Similarity → decision</h3>
+          <p>Absolute thresholds on top-match score. Refuses to answer rather than generating low-quality output.</p>
+          <div class="gate-row">
+            <div class="gate-box high">
+              <div class="gate-val">≥ 0.65</div>
+              <div class="gate-lbl">High · Answer</div>
+            </div>
+            <div class="gate-box med">
+              <div class="gate-val">0.45 – 0.65</div>
+              <div class="gate-lbl">Medium · Caveat</div>
+            </div>
+            <div class="gate-box low">
+              <div class="gate-val">&lt; 0.45</div>
+              <div class="gate-lbl">Low · Refuse</div>
+            </div>
+          </div>
+          <div class="gate-result">✓ Top match 0.71 → HIGH confidence → proceed to reasoning</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 6: LLM reasoning -->
+    <div class="flow-step">
+      <div class="flow-step-left">
+        <div class="step-num">6</div>
+        <div class="step-line"></div>
+      </div>
+      <div class="flow-step-body">
+        <div class="step-label">GPT-4o Reasoning (grounded)</div>
+        <div class="step-card">
+          <h3>Episode context → cited answer</h3>
+          <p>Instructed to reason ONLY from retrieved episodes, cite dates + similarity, and never invent facts. Streams back to user.</p>
+          <div class="answer-bubble">
+            The closest analog is the 2006-11 tightening episode (sim 0.71), where yield spread reached −0.25% with Fed funds at 5.25%. Equities held for 6 months before declining 28.4% over the following year. The 2019 episode (sim 0.65) shows a contrasting outcome — yield curve briefly inverted but the Fed pivoted quickly, producing a +14.8% recovery.
+            <div class="answer-source">
+              → Source: <span>2006-11-01 → 2007-06-15</span> · sim 0.71 &nbsp;|&nbsp; <span>2000-03 → 2001-01</span> · sim 0.68 &nbsp;|&nbsp; <span>2019-08 → 2019-10</span> · sim 0.65
+            </div>
+          </div>
+          <div class="meta-row">
+            <div class="meta-chip">Confidence <span>0.71</span></div>
+            <div class="meta-chip">Latency <span>312 ms</span></div>
+            <div class="meta-chip">Episodes cited <span>3</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end query-flow -->
+
+  <!-- RIGHT: Metrics + positioning -->
+  <div class="side-panel">
+    <div class="side-title">Measured Results</div>
+
+    <div class="stat-grid" style="margin-bottom:14px;">
+      <div class="stat-box">
+        <div class="val">74.7%</div>
+        <div class="lbl">Directional accuracy (LOO)</div>
+      </div>
+      <div class="stat-box">
+        <div class="val">0.186</div>
+        <div class="lbl">Brier score (↓ = better)</div>
+      </div>
+      <div class="stat-box">
+        <div class="val">84%</div>
+        <div class="lbl">Recall@5 at 8-dim compression</div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-label">Calibration</div>
+      <div class="stage-title">Leave-one-out · N=71</div>
+      <div class="stage-detail">For each episode, retrieve top-5 excluding self, predict direction from neighbors, compare to actual 6m outcome.</div>
+      <div class="stage-badge">Bootstrap 95% CI</div>
+    </div>
+
+    <div class="side-arrow">↓</div>
+
+    <div class="stage">
+      <div class="stage-label">Compression</div>
+      <div class="stage-title">PCA Ablation</div>
+      <div class="stage-detail">391-dim → 8-dim retains 80.6% Recall@5. Capability degrades smoothly — no cliff. Optimal sweet spot ~32-dim.</div>
+      <div class="stage-badge teal">−77% storage</div>
+    </div>
+
+    <div class="side-arrow">↓</div>
+
+    <div class="stage">
+      <div class="stage-label">Isotropy Fix</div>
+      <div class="stage-title">All-but-the-Top</div>
+      <div class="stage-detail">Removing top-1 PC: 69.0% → 74.7% dir. acc. Similarity distribution: μ=0.867 → μ=−0.044. Effective rank: 4.3 → ~12.</div>
+      <div class="stage-badge orange">ICLR 2018</div>
+    </div>
+
+    <div style="margin-top:18px; padding-top:14px; border-top:1px solid #1E3D2A;">
+      <div class="side-title" style="margin-bottom:10px;">Who This Is For</div>
+      <div class="stage-detail" style="line-height:1.7;">
+        <b style="color:#EDFAF4;">Portfolio Managers</b> — What did the Fed pivot look like last time?<br>
+        <b style="color:#EDFAF4;">Macro Analysts</b> — Find every inversion+tightening episode.<br>
+        <b style="color:#EDFAF4;">Risk Teams</b> — What's the historical max drawdown in this regime?
+      </div>
+    </div>
+  </div>
+
+</div><!-- end main -->
+
+<!-- ── POSITIONING ── -->
+<div class="positioning">
+
+  <div class="pos-card">
+    <h2>What FinMem Is vs Is Not</h2>
+    <div class="pos-pill">
+      <div class="dot"></div>
+      <div><strong>Is:</strong> A financial historian with episodic memory — retrieves and cites real historical market episodes structurally similar to current conditions.</div>
+    </div>
+    <div class="pos-pill">
+      <div class="dot"></div>
+      <div><strong>Is:</strong> A research tool — surfaces base rates, historical context, regime transitions with explicit source attribution.</div>
+    </div>
+    <div class="pos-pill">
+      <div class="dot red"></div>
+      <div><strong>Is not:</strong> A trading signal or alpha generator. No price predictions, no buy/sell recommendations.</div>
+    </div>
+    <div class="pos-pill">
+      <div class="dot red"></div>
+      <div><strong>Is not:</strong> A general-purpose financial chatbot. Grounded exclusively in its episodic memory — refuses when uncertain.</div>
+    </div>
+    <div class="pos-pill">
+      <div class="dot red"></div>
+      <div><strong>Is not:</strong> A fine-tuned model. Knowledge lives in the memory store, not model weights — it is updatable, auditable, and citeable.</div>
+    </div>
+  </div>
+
+  <div class="pos-card">
+    <h2>FinMem vs Alternatives</h2>
+    <table class="vs">
+      <thead>
+        <tr>
+          <th>Capability</th>
+          <th>General LLM</th>
+          <th>Fixed-window RAG</th>
+          <th>FinMem</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Cites specific episodes</td>
+          <td><span class="bad">✗ No</span></td>
+          <td><span class="bad">✗ No</span></td>
+          <td><span class="good">✓ Always</span></td>
+        </tr>
+        <tr>
+          <td>Regime-aware retrieval</td>
+          <td><span class="bad">✗ No</span></td>
+          <td><span class="bad">✗ No</span></td>
+          <td><span class="good">✓ 7 regimes</span></td>
+        </tr>
+        <tr>
+          <td>Refuses when uncertain</td>
+          <td><span class="bad">✗ Hallucinates</span></td>
+          <td><span class="bad">✗ Degrades</span></td>
+          <td><span class="good">✓ Confidence gate</span></td>
+        </tr>
+        <tr>
+          <td>Structural episode detection</td>
+          <td><span class="bad">✗ No</span></td>
+          <td><span class="bad">✗ Arbitrary chunks</span></td>
+          <td><span class="good">✓ PELT detection</span></td>
+        </tr>
+        <tr>
+          <td>Calibrated accuracy metric</td>
+          <td><span class="bad">✗ Unknown</span></td>
+          <td><span class="bad">✗ Unknown</span></td>
+          <td><span class="good">✓ 74.7% LOO</span></td>
+        </tr>
+        <tr>
+          <td>Stale knowledge cutoff</td>
+          <td><span class="bad">✗ Fixed cutoff</span></td>
+          <td>Depends on data</td>
+          <td><span class="good">✓ Live data feed</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<div class="footer">
+  FinMem · Episodic RAG for Financial Markets · Stack: FastAPI · LanceDB · Next.js · GPT-4o · PELT · MiniLM · All-but-the-Top (ICLR 2018)
+</div>
+
+</body>
+</html>

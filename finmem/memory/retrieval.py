@@ -3,7 +3,8 @@ import numpy as np
 import pandas as pd
 from finmem.data.schemas import Episode, MarketState, RetrievalResult, QueryResult
 from finmem.memory.embeddings import embed_state
-from finmem.memory.store import get_table
+from finmem.memory.store import get_table, get_whitened_state
+from finmem.memory.regime import predict_state_regime
 
 CONFIDENCE_HIGH   = 0.65
 CONFIDENCE_LOW    = 0.45
@@ -14,20 +15,13 @@ TOP_K             = 5
 CANDIDATE_K       = 20
 
 
-def _assign_regime(state: MarketState) -> str:
-    if state.vix > 35:
-        return "CRISIS"
-    if state.vix > 25 and state.spy_return_21d < -0.08:
-        return "SELLOFF"
-    if state.cpi > 5 and state.fed_rate > 3:
-        return "TIGHTENING"
-    if state.yield_spread < -0.2 and state.fed_rate > 2:
-        return "TIGHTENING+SLOWDOWN"
-    if state.fed_rate < 1 and state.spy_return_21d > 0:
-        return "EASING+RECOVERY"
-    if state.spy_return_21d > 0.05 and state.vix < 20:
-        return "BULL"
-    return "STABLE"
+def _whiten_query(vec: np.ndarray, mean_vec: np.ndarray, top_pcs: np.ndarray) -> np.ndarray:
+    """Apply all-but-the-top transform to a single query vector."""
+    centered = vec - mean_vec
+    proj     = centered @ top_pcs.T @ top_pcs
+    whitened = centered - proj
+    norm     = np.linalg.norm(whitened)
+    return (whitened / (norm + 1e-8)).astype(np.float32)
 
 
 def _row_to_episode(row: pd.Series) -> Episode:
@@ -55,27 +49,32 @@ def _row_to_episode(row: pd.Series) -> Episode:
 
 def retrieve(state: MarketState, k: int = TOP_K) -> QueryResult:
     t0      = time.time()
-    vec     = embed_state(state)
-    table   = get_table()
-    state_regime = _assign_regime(state)
+    raw_vec = embed_state(state)
 
-    results = (
-        table.search(vec.tolist())
-             .metric("cosine")
-             .limit(CANDIDATE_K)
-             .to_pandas()
-    )
+    # Load pre-whitened episode vectors and apply same transform to the query.
+    # all-but-the-top (Mu & Viswanath, ICLR 2018): removes the dominant
+    # 'financial episode' direction so cosine similarity is actually discriminative.
+    whitened_ep_vecs, df_ep, mean_vec, top_pcs = get_whitened_state()
+    whitened_query = _whiten_query(raw_vec, mean_vec, top_pcs)
 
+    # Cosine similarity: both sides are L2-normalised by get_whitened_state / _whiten_query
+    sims = whitened_ep_vecs @ whitened_query
+
+    # Take top CANDIDATE_K for reranking
+    top_candidate_idx = np.argsort(sims)[-CANDIDATE_K:][::-1]
+
+    state_regime = predict_state_regime(state)
     reranked: list[RetrievalResult] = []
     current_year = pd.Timestamp.now().year
 
-    for _, row in results.iterrows():
-        base_sim = float(1 - row["_distance"])  # cosine distance → similarity
+    for idx in top_candidate_idx:
+        row      = df_ep.iloc[int(idx)]
+        base_sim = float(sims[idx])
         regime_bonus = REGIME_BONUS if row["regime"] == state_regime else 0.0
-        ep_year = int(str(row["start_date"])[:4])
+        ep_year  = int(str(row["start_date"])[:4])
         years_ago = current_year - ep_year
         recency_pen = RECENCY_PENALTY if years_ago > RECENCY_CUTOFF_YR else 0.0
-        final = base_sim + regime_bonus - recency_pen
+        final    = base_sim + regime_bonus - recency_pen
 
         reranked.append(RetrievalResult(
             episode=_row_to_episode(row),
@@ -88,7 +87,7 @@ def retrieve(state: MarketState, k: int = TOP_K) -> QueryResult:
     reranked.sort(key=lambda r: r.final_score, reverse=True)
     top = reranked[:k]
 
-    top_sim   = top[0].final_score if top else 0.0
+    top_sim    = top[0].final_score if top else 0.0
     has_analog = top_sim >= CONFIDENCE_LOW
     confidence = min(top_sim, 1.0)
 

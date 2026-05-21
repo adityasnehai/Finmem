@@ -8,6 +8,7 @@ from rich.columns import Columns
 from rich import box
 from finmem.data.schemas import MarketState, QueryResult
 from finmem.memory.store import count_episodes, episode_date_range
+from finmem.memory.regime import predict_state_regime
 
 console = Console()
 
@@ -29,7 +30,7 @@ def _market_panel(state: MarketState) -> Panel:
     vix_color  = "red" if state.vix > 25 else ("yellow" if state.vix > 18 else "green")
     crv_color  = "red" if state.yield_spread < 0 else "green"
 
-    regime = _regime_label(state)
+    regime = predict_state_regime(state)
 
     grid.add_row(
         "SPY",     Text(f"${state.spy_price:.2f}  {state.spy_return_5d:+.1%} 5d", style=spy_color),
@@ -51,14 +52,6 @@ def _market_panel(state: MarketState) -> Panel:
     return Panel(grid, title="[bold]MARKET STATE[/bold]", border_style="dim", box=box.SIMPLE_HEAD)
 
 
-def _regime_label(state: MarketState) -> str:
-    if state.vix > 35:                                      return "CRISIS"
-    if state.vix > 25 and state.spy_return_21d < -0.08:    return "SELLOFF"
-    if state.cpi > 5 and state.fed_rate > 3:               return "TIGHTENING"
-    if state.yield_spread < -0.2 and state.fed_rate > 2:   return "TIGHTENING+SLOWDOWN"
-    if state.fed_rate < 1 and state.spy_return_21d > 0:    return "EASING+RECOVERY"
-    if state.spy_return_21d > 0.05 and state.vix < 20:     return "BULL"
-    return "STABLE"
 
 
 def _episodes_panel(result: QueryResult) -> Panel:
