@@ -1,11 +1,42 @@
 import os
+import time
+import requests
 import pandas as pd
 import yfinance as yf
 from fredapi import Fred
-from datetime import date, timedelta
+from datetime import date
 from rich.console import Console
 
 console = Console()
+
+# Yahoo Finance blocks cloud provider IPs when using the default urllib User-Agent.
+# A browser-like session header bypasses the rate limiter.
+_YF_SESSION = requests.Session()
+_YF_SESSION.headers.update({
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+})
+
+
+def _yf_download(ticker: str, start: str, end: str, retries: int = 3) -> pd.DataFrame:
+    for attempt in range(retries):
+        try:
+            df = yf.download(
+                ticker, start=start, end=end,
+                progress=False, auto_adjust=True,
+                session=_YF_SESSION,
+            )
+            if not df.empty:
+                return df
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+            else:
+                raise
+    raise RuntimeError(f"yfinance: empty response for {ticker} after {retries} attempts")
 
 FRED_SERIES = {
     "cpi":          "CPIAUCSL",
@@ -20,7 +51,7 @@ END_DATE   = date.today().strftime("%Y-%m-%d")
 
 def load_spy(start: str = START_DATE, end: str = END_DATE) -> pd.DataFrame:
     console.print("[dim]Fetching SPY from yfinance...[/dim]")
-    spy = yf.download("SPY", start=start, end=end, progress=False, auto_adjust=True)
+    spy = _yf_download("SPY", start=start, end=end)
     spy = spy[["Close", "Volume"]].copy()
     spy.columns = ["spy_close", "spy_volume"]
     spy.index = pd.to_datetime(spy.index).normalize()
@@ -34,7 +65,7 @@ def load_spy(start: str = START_DATE, end: str = END_DATE) -> pd.DataFrame:
 
 def load_vix(start: str = START_DATE, end: str = END_DATE) -> pd.DataFrame:
     console.print("[dim]Fetching VIX from yfinance...[/dim]")
-    vix = yf.download("^VIX", start=start, end=end, progress=False, auto_adjust=True)
+    vix = _yf_download("^VIX", start=start, end=end)
     vix = vix[["Close"]].copy()
     vix.columns = ["vix"]
     vix.index = pd.to_datetime(vix.index).normalize()
