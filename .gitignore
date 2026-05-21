@@ -28,3 +28,6 @@ notebooks/.ipynb_checkpoints/
 
 # finmem_db/ — intentionally tracked (committed after ingest)
 # hmm_regime.pkl — intentionally tracked (committed after ingest)
+
+# Market data cache — generated at runtime, not committed
+data/market_cache.parquet

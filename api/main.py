@@ -63,6 +63,28 @@ app.add_middleware(
 _df: pd.DataFrame | None = None
 _client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=30.0)
 
+_CACHE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "market_cache.parquet")
+
+
+def _save_cache(df: pd.DataFrame) -> None:
+    try:
+        os.makedirs(os.path.dirname(_CACHE_PATH), exist_ok=True)
+        df.to_parquet(_CACHE_PATH)
+        logger.info("Market data cached to %s", _CACHE_PATH)
+    except Exception as e:
+        logger.warning("Could not save market cache: %s", e)
+
+
+def _load_cache() -> pd.DataFrame | None:
+    try:
+        if os.path.exists(_CACHE_PATH):
+            df = pd.read_parquet(_CACHE_PATH)
+            logger.info("Loaded market data from cache (%s rows, last=%s)", len(df), df.index[-1].date())
+            return df
+    except Exception as e:
+        logger.warning("Could not read market cache: %s", e)
+    return None
+
 
 @app.on_event("startup")
 async def _warmup():
@@ -75,14 +97,27 @@ def _warmup_sync():
     global _df
     try:
         _df = load_all()
-    except Exception:
-        pass  # yfinance may be temporarily unavailable; lazy-load on first request
+        _save_cache(_df)
+    except Exception as e:
+        logger.warning("yfinance unavailable on startup (%s); trying cache", e)
+        _df = _load_cache()
 
 
 def get_df() -> pd.DataFrame:
     global _df
-    if _df is None or _df.index[-1].date() < _date.today():
-        _df = load_all()
+    today = _date.today()
+    if _df is None or _df.index[-1].date() < today:
+        try:
+            _df = load_all()
+            _save_cache(_df)
+        except Exception as e:
+            logger.warning("yfinance unavailable (%s); using cached data", e)
+            if _df is None:
+                cached = _load_cache()
+                if cached is not None:
+                    _df = cached
+                else:
+                    raise RuntimeError("No market data available: yfinance failed and no cache found") from e
     return _df
 
 
