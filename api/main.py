@@ -93,15 +93,20 @@ async def _warmup():
     await loop.run_in_executor(None, _warmup_sync)
 
 
+def _cache_is_fresh(df: pd.DataFrame, max_age_days: int = 4) -> bool:
+    """Cache is fresh if last row is within max_age_days (handles weekends + holidays)."""
+    from datetime import timedelta
+    return df.index[-1].date() >= (_date.today() - timedelta(days=max_age_days))
+
+
 def _warmup_sync():
     global _df
-    # Always load from committed cache first — avoids yfinance rate limits on cloud IPs.
-    # yfinance is only called when the cache is stale (last row is a past date).
     cached = _load_cache()
     if cached is not None:
         _df = cached
-        if _df.index[-1].date() >= _date.today():
-            return  # cache is current, skip yfinance entirely
+        if _cache_is_fresh(cached):
+            logger.info("Cache is fresh (last=%s), skipping yfinance", cached.index[-1].date())
+            return
     try:
         _df = load_all()
         _save_cache(_df)
@@ -113,22 +118,19 @@ def _warmup_sync():
 
 def get_df() -> pd.DataFrame:
     global _df
-    today = _date.today()
-    if _df is None or _df.index[-1].date() < today:
+    if _df is None:
         cached = _load_cache()
-        if cached is not None and cached.index[-1].date() >= today:
+        if cached is not None:
             _df = cached
-        else:
-            try:
-                _df = load_all()
-                _save_cache(_df)
-            except Exception as e:
-                logger.warning("yfinance unavailable (%s); using cached data", e)
-                if _df is None:
-                    if cached is not None:
-                        _df = cached
-                    else:
-                        raise RuntimeError("No market data: yfinance failed and no cache found") from e
+    if _df is not None and _cache_is_fresh(_df):
+        return _df
+    try:
+        _df = load_all()
+        _save_cache(_df)
+    except Exception as e:
+        logger.warning("yfinance unavailable (%s); using cached data", e)
+        if _df is None:
+            raise RuntimeError("No market data: yfinance failed and no cache found") from e
     return _df
 
 
