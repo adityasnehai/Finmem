@@ -15,7 +15,7 @@ import {
 } from "recharts";
 
 interface Episode {
-  id: number;
+  id: string | number;
   start_date: string;
   end_date: string;
   regime: string;
@@ -146,7 +146,7 @@ export default function EpisodeDetailPage() {
               </span>
             </div>
             <h1 className="font-[var(--font-heading)] text-2xl font-bold text-[#0F2B23]">
-              Episode #{episode.id}
+              {episode.start_date} — {episode.end_date}
             </h1>
           </div>
         </div>

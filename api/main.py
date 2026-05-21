@@ -38,7 +38,6 @@ from finmem.data.schemas import MarketState
 from finmem.memory.retrieval import retrieve
 from finmem.memory.store import get_table, count_episodes, episode_date_range, get_whitened_state
 from finmem.memory.regime import predict_state_regime
-from finmem.reasoning.engine import reason
 from finmem.reasoning.confidence import confidence_gate
 from openai import OpenAI
 import pandas as pd
@@ -241,7 +240,7 @@ def search_episodes(
         tbl   = get_table()
         df_ep = tbl.to_pandas()
     except Exception:
-        raise HTTPException(503, "Memory not initialized. Run make ingest first.")
+        raise HTTPException(503, "Memory not initialized.")
 
     if cpi_gt  is not None: df_ep = df_ep[df_ep["cpi"]       > cpi_gt]
     if cpi_lt  is not None: df_ep = df_ep[df_ep["cpi"]       < cpi_lt]
