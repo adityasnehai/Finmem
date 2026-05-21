@@ -1,6 +1,5 @@
 import os
 import time
-import requests
 import pandas as pd
 import yfinance as yf
 from fredapi import Fred
@@ -9,25 +8,14 @@ from rich.console import Console
 
 console = Console()
 
-# Yahoo Finance blocks cloud provider IPs when using the default urllib User-Agent.
-# A browser-like session header bypasses the rate limiter.
-_YF_SESSION = requests.Session()
-_YF_SESSION.headers.update({
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    )
-})
-
 
 def _yf_download(ticker: str, start: str, end: str, retries: int = 3) -> pd.DataFrame:
+    """Download from Yahoo Finance using yfinance's built-in curl_cffi session (TLS impersonation)."""
     for attempt in range(retries):
         try:
             df = yf.download(
                 ticker, start=start, end=end,
                 progress=False, auto_adjust=True,
-                session=_YF_SESSION,
             )
             if not df.empty:
                 return df

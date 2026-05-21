@@ -1,4 +1,5 @@
 yfinance>=0.2.40
+curl_cffi>=0.7.0
 fredapi>=0.5.2
 pandas>=2.2.0
 numpy>=1.26.0
