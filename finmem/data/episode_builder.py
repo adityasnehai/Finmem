@@ -10,7 +10,9 @@ from finmem.data.schemas import Episode
 from finmem.memory.regime import predict_sequence_regime
 
 console = Console()
-client  = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+def _get_client() -> OpenAI:
+    return OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 
 def _compute_forward_returns(df: pd.DataFrame, end_idx: int) -> dict:
@@ -43,7 +45,7 @@ def _summarize_episode(ep: dict) -> str:
         f"Be factual and concise. No predictions, no opinions."
     )
     try:
-        resp = client.chat.completions.create(
+        resp = _get_client().chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=120,
