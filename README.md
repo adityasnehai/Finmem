@@ -1,312 +1,349 @@
-# FinMem: Financial Episodic Memory System
+# FinMem — Financial Episodic Memory System
 
-A production-ready financial intelligence system that enables natural language queries about historical market episodes and generates actionable insights with statistical confidence.
-
-**Status**: ✅ **PRODUCTION READY** (All 4 Phases Complete)
-
----
-
-## What Is FinMem?
-
-FinMem answers financial questions like:
-- "What happens after volatility spikes?"
-- "How do BULL markets typically perform?"
-- "Given SPY at 450, VIX at 22, and CPI at 3.2%, what should I expect in 6 months?"
-
-Instead of generic market analysis, FinMem finds historically similar episodes and shows you:
-- **What happened before**: Previous episodes with matching conditions
-- **Statistical outcomes**: Mean return, win rate, risk metrics
-- **Confidence level**: HIGH (strong pattern) / MEDIUM (moderate) / LOW (limited data)
-- **Risk assessment**: Worst-case loss, best-case gain, Sharpe ratio
-- **Watch points**: When the historical pattern might break
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.104-009688?style=flat&logo=fastapi&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat&logo=nextdotjs&logoColor=white)
+![LanceDB](https://img.shields.io/badge/LanceDB-Vector_DB-FF6B35?style=flat)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o-412991?style=flat&logo=openai&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat)
+![CI](https://github.com/adityasnehai/Finmem/actions/workflows/ci.yml/badge.svg)
 
 ---
 
-## Quick Start (2 minutes)
+## What is FinMem?
 
-### Prerequisites
-- Python 3.9+
-- PostgreSQL 14+
-- ~1GB disk space
+FinMem is a **retrieval-augmented financial research system** that answers questions about markets by finding the most structurally similar historical periods — not by guessing from a language model's weights.
 
-### Install & Run
+Instead of asking "what do you think will happen?", FinMem asks: *"When have conditions like this occurred before, and what happened next?"*
+
+Every answer is grounded in a retrieved historical episode with a similarity score, a confidence rating, and the actual forward returns that followed.
+
+---
+
+## The Problem
+
+Large language models hallucinate financial history. They fabricate dates, misremember regime conditions, and produce confident answers with no grounding. Existing tools either:
+- Use a fixed recency window (last 90 days) — missing structural analogs from decades ago
+- Rely on LLM memory alone — no citations, no verifiability
+- Retrieve by keyword — missing periods that are numerically similar but described differently
+
+**The core insight:** markets repeat structural patterns, not calendar dates. A 2024 yield curve inversion is more similar to 2006 than to 2023, regardless of how they are described in text.
+
+---
+
+## How It Works
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         DATA SOURCES                            │
+│   yfinance (SPY, VIX)          FRED API (CPI, Fed Rate,        │
+│   1993 → today, daily          Yield Spread, Unemployment)      │
+└───────────────┬────────────────────────┬────────────────────────┘
+                │                        │
+                ▼                        ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                   INGEST PIPELINE  (scripts/ingest.py)           │
+│                                                                  │
+│  1. Load all data → merged daily DataFrame (1993–today)          │
+│                                                                  │
+│  2. PELT Changepoint Detection                                   │
+│     ruptures library, RBF kernel on [return, volatility]         │
+│     Penalty auto-tuned to produce 50–100 episodes               │
+│                                                                  │
+│  3. Gaussian HMM Regime Labeling  (Hamilton 1989)                │
+│     7 latent states on 6 features                                │
+│     States mapped to labels by emission mean inspection          │
+│     Labels: STABLE · BULL · CRISIS · SELLOFF · TIGHTENING       │
+│             TIGHTENING+SLOWDOWN · EASING+RECOVERY               │
+│                                                                  │
+│  4. Episode Feature Extraction                                   │
+│     avg return, max drawdown, VIX, CPI, fed rate,               │
+│     yield spread, unemployment, 1m/3m/6m forward returns        │
+│                                                                  │
+│  5. GPT-4o-mini Prose Summary per episode                        │
+│                                                                  │
+│  6. 519-dim Hybrid Embedding                                     │
+│     7-dim structural vector (normalized macro + price)           │
+│     512-dim Matryoshka text embedding (text-embedding-3-small)   │
+│     Weighted concat: struct×0.6 + text×0.4 → L2-normalized      │
+│                                                                  │
+│  7. All-But-The-Top Whitening  (Mu & Viswanath, ICLR 2018)      │
+│     Removes dominant "financial episode" direction via PCA       │
+│     Makes cosine similarity discriminative                       │
+│                                                                  │
+│  8. LanceDB Storage (on-disk vector database)                    │
+└──────────────────────────┬───────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                    QUERY PIPELINE  (FastAPI)                      │
+│                                                                  │
+│  User question                                                   │
+│       │                                                          │
+│       ▼                                                          │
+│  Embed today's market state → 519-dim hybrid vector             │
+│       ▼                                                          │
+│  Apply same whitening transform to query vector                  │
+│       ▼                                                          │
+│  Cosine similarity against all whitened episode vectors          │
+│  Top-20 candidates → reranking                                   │
+│       + regime bonus  (+0.10 if episode regime matches today)    │
+│       - recency penalty (-0.05 if episode > 15 years old)       │
+│       ▼                                                          │
+│  Confidence gate                                                 │
+│  sim ≥ 0.27 → reason freely                                     │
+│  sim ≥ 0.15 → reason with uncertainty warning                   │
+│  sim < 0.15 → refuse, return "no analog found"                  │
+│       ▼                                                          │
+│  GPT-4o reasons ONLY from retrieved episodes                     │
+│  Cites episode date ranges + similarity scores                   │
+│  Streams response via SSE                                        │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Key Technical Decisions
+
+| Decision | What we chose | Why |
+|---|---|---|
+| Episode detection | PELT changepoint detection (RBF kernel) | Finds structural breaks in return + vol signal — no arbitrary fixed windows |
+| Regime labeling | Gaussian HMM (Hamilton 1989, 7 states) | Data-driven, no hand-coded thresholds; labels assigned by emission mean inspection |
+| Embedding | 519-dim hybrid (7 structural + 512 text) | Structural catches numeric similarity; text catches semantic similarity |
+| Text embedding | text-embedding-3-small, Matryoshka 512-dim | Cheaper storage vs full 1536-dim, same quality for this task |
+| Post-processing | All-but-the-top whitening (Mu & Viswanath) | Raw cosine on financial embeddings is near-isotropic; whitening makes it discriminative |
+| Retrieval | Cosine similarity + reranking | Regime bonus rewards same macro context; recency penalty avoids over-weighting old episodes |
+| Confidence | Threshold gate (0.27 / 0.15) | Calibrated on actual pairwise similarity distribution — refuses rather than hallucinating |
+| LLM reasoning | GPT-4o with strict system prompt | Reasons only from retrieved context; cites sources; refuses to invent |
+| LLM summaries | GPT-4o-mini | Cost-quality tradeoff: mini sufficient for structured 2-sentence summaries |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Data | yfinance, FRED API |
+| Episode detection | ruptures (PELT) |
+| Regime labeling | hmmlearn (Gaussian HMM) |
+| Embeddings | OpenAI text-embedding-3-small |
+| Vector store | LanceDB |
+| Backend | FastAPI + uvicorn |
+| Frontend | Next.js 16, Tailwind CSS, Recharts |
+| CI/CD | GitHub Actions |
+| Hosting | Render (API) + Vercel (frontend) |
+
+---
+
+## Features
+
+### Today's Analog
+Compares today's market state against all historical episodes and surfaces the top 5 most similar periods with similarity scores and the forward returns that followed.
+
+### Episode Browser
+Full searchable database of all detected market episodes. Filter by regime, date, or keyword. Each episode shows macro conditions at entry, total return, max drawdown, and 1m / 3m / 6m SPY forward returns.
+
+### Chat
+Free-form questions about market history. Every answer is generated strictly from retrieved episodes — the system prompt forbids the LLM from using knowledge outside retrieved context. Confidence score shown per response.
+
+### Analytics
+Retrieval quality benchmark comparing three systems — FinMem RAG vs. Recency Window (90d) vs. No Retrieval. PCA compression ablation on stored embeddings.
+
+### Insights
+Regime transition matrix with historical probabilities. Precursor frequency analysis — which signals (VIX spike, yield inversion, Fed tightening) preceded each regime shift.
+
+### Episode Compare
+Side-by-side comparison of any two episodes across all features and forward returns.
+
+---
+
+## How Similarity is Calculated
+
+```
+Ingest (per episode):
+  struct_vec = normalize([avg_return, vol, cpi/10, fed/10, spread/5, vix/50, unemp/10])
+  text_vec   = openai_embed(prose_summary, dims=512)
+  hybrid     = normalize(struct_vec × 0.6 ‖ text_vec × 0.4)   # 519-dim
+
+Whitening (across all episode vectors):
+  centered   = hybrid - mean(all_hybrids)
+  top_pc     = PCA(n=1).fit(centered).components_
+  whitened   = normalize(centered - centered @ top_pc.T @ top_pc)
+
+Query time:
+  query_vec  = embed(today's market state)     # same 519-dim pipeline
+  query_w    = apply_same_whiten(query_vec)
+  similarity = dot(query_w, episode_w)         # both L2-normalized = cosine
+
+Reranking:
+  final_score = similarity
+                + 0.10  (if episode regime == today's HMM regime)
+                - 0.05  (if episode start year < current_year - 15)
+```
+
+---
+
+## Success Criteria
+
+| Criteria | How measured |
+|---|---|
+| Retrieval is grounded | Every response cites episode date range + similarity score |
+| Confidence is calibrated | Thresholds set from empirical pairwise similarity distribution, not guessed |
+| System refuses when uncertain | `confidence_gate()` returns refusal below sim 0.15 — never hallucinates |
+| Retrieval beats baselines | `make eval` runs ablation: RAG vs. fixed window vs. no retrieval |
+| Forward returns are real | Computed from actual SPY closing prices |
+| Regime labels are data-driven | HMM fitted on data; no hand-coded thresholds |
+
+---
+
+## Limitations
+
+- **Free tier cold start**: Render free tier spins down after 15 min — first request takes ~30s
+- **yfinance rate limits**: Yahoo Finance throttles on cold start — resolves in 1–2 min
+- **Recent episodes have no forward returns**: Episodes ending within last 6 months have null 6m forward returns (expected)
+- **HMM is non-deterministic across re-ingests**: Re-fitting shifts regime boundaries slightly
+- **Single-node vector search**: Brute-force cosine scan — adequate for ~100 episodes, needs ANN index at scale
+- **No intraday data**: Daily resolution only; ingest runs once per day
+- **FRED data is monthly**: CPI, unemployment, fed rate are forward-filled from monthly releases
+
+---
+
+## External Data
+
+| Source | Series | Frequency |
+|---|---|---|
+| yfinance | SPY (price, volume), ^VIX | Daily |
+| FRED | CPIAUCSL (CPI), FEDFUNDS (Fed rate), T10Y2Y (yield spread), UNRATE (unemployment) | Monthly → forward-filled |
+
+FRED API key is free at [fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html).
+
+---
+
+## Local Setup
+
+**Prerequisites:** Python 3.11+, Node.js 20+, OpenAI API key, FRED API key
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/yourusername/finmem.git
-cd finmem
+# 1. Clone and install
+git clone https://github.com/adityasnehai/Finmem.git
+cd Finmem
+pip install -e ".[dev]"
 
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Configure environment
+# 2. Set environment variables
 cp .env.example .env
-# Edit .env: add DATABASE_URL, FRED_API_KEY, OPENAI_API_KEY
+# Edit .env: add OPENAI_API_KEY and FRED_API_KEY
 
-# 4. Initialize database (one-time)
-python scripts/init_db.py
-python scripts/run_phase2.py  # Creates 61 market episodes
+# 3. Run ingest (fetches data, fits HMM, builds episodes, embeds, stores)
+# Takes ~5–10 min on first run
+make ingest
 
-# 5. Start API servers
-python -m uvicorn api.endpoints:app --port 8000 --reload &
-python -m uvicorn api.chat_endpoints:app --port 8001 --reload
+# 4. Start API
+make api
+# → http://localhost:8000
+# → http://localhost:8000/docs
 
-# 6. Test the system
-curl -X POST http://localhost:8001/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "conversation_id": "user_001",
-    "message": "What happens after volatility spikes?"
-  }'
+# 5. Start frontend (new terminal)
+cd web && npm install && npm run dev
+# → http://localhost:3000
 ```
 
 ---
 
-## System Architecture
+## Deploy to Render + Vercel
 
-```
-Phase 4: Chat Interface (Natural Language Conversations)
-    ↓
-Phase 3: Episodic Reasoning (Find Similar Episodes + Statistics)
-    ↓
-Phase 2: Episode Detection (Markov Switching + FinBERT Embeddings)
-    ↓
-Phase 1: Market Data Collection (FRED API + Yahoo Finance)
-```
+### API → Render
 
-### What Each Phase Does
+1. [render.com](https://render.com) → **New Web Service** → connect this repo
+2. Settings: Runtime `Python 3`, Build `pip install -r requirements.txt`, Start `uvicorn api.main:app --host 0.0.0.0 --port $PORT`, Branch `main`
+3. Environment variables: `OPENAI_API_KEY`, `FRED_API_KEY`, `ALLOWED_ORIGIN` (your Vercel URL)
+4. Verify: `https://your-api.onrender.com/api/health` → `{"status":"ok"}`
 
-| Phase | Purpose | Input | Output |
-|-------|---------|-------|--------|
-| **Phase 1** | Collect & normalize market data | FRED API, Yahoo Finance | Market indicators (PostgreSQL) |
-| **Phase 2** | Detect market regimes & create episodes | Market indicators | 61 episodes with FinBERT embeddings (LanceDB) |
-| **Phase 3** | Find similar episodes & analyze | User query | Top-K similar episodes + statistics |
-| **Phase 4** | Conversational interface | Natural language | Chat response with confidence & risk |
+### Frontend → Vercel
+
+1. [vercel.com](https://vercel.com) → **New Project** → import this repo
+2. Root directory: `web`
+3. Environment variable: `NEXT_PUBLIC_API_URL` = your Render URL
+4. Deploy
 
 ---
 
-## Key Features
+## CI/CD
 
-✅ **Natural Language Understanding**
-- Parses "What happens when VIX spikes?" into structured queries
-- Extracts market metrics: SPY price, VIX, CPI, Fed Rate, etc.
-- Handles ambiguity with clarifying follow-ups
+GitHub Actions on every push to `main`:
+- Backend: `pip install -r requirements.txt` → `pytest tests/`
+- Frontend: `npm ci` → `npm run build`
 
-✅ **Intelligent Search**
-- Semantic search using FinBERT (768-dim embeddings)
-- Metadata filtering by regime (BULL/BEAR/RECOVERY/etc.)
-- Hybrid approach combines semantic + metadata
-
-✅ **Statistical Analysis**
-- Mean & median returns (6-month forward)
-- Win rate (% positive returns)
-- Sharpe ratio (risk-adjusted return)
-- Statistical significance testing (binomial test)
-- Confidence levels based on sample size
-
-✅ **Risk-Aware Responses**
-- Multiple-layer disclaimers (5+ caveats)
-- Worst-case loss / best-case gain estimates
-- Watch points showing when pattern might break
-- Honest confidence explanations
-
-✅ **Conversation Memory**
-- Maintains context across 30 messages
-- Remembers user preferences (time horizon, regime, risk tolerance)
-- Supports multi-turn refinement
-
-✅ **Production-Ready**
-- All components tested (8 comprehensive test suites, ✅ all pass)
-- Input validation (Pydantic)
-- Error handling & graceful fallbacks
-- Deployed on PostgreSQL + LanceDB + FastAPI
+Secrets needed in repo settings: `OPENAI_API_KEY`, `NEXT_PUBLIC_API_URL`
 
 ---
 
-## API Keys Required
+## Project Structure
 
-## API Endpoints
+```
+FinMem/
+├── api/
+│   ├── main.py              # FastAPI — all endpoints
+│   └── query_engine.py      # Precursor/transition queries
+├── finmem/
+│   ├── data/
+│   │   ├── loaders.py       # yfinance + FRED fetch
+│   │   ├── episode_builder.py  # PELT + episode construction
+│   │   └── schemas.py       # Pydantic models
+│   ├── memory/
+│   │   ├── embeddings.py    # 519-dim hybrid embedding
+│   │   ├── regime.py        # Gaussian HMM regime detector
+│   │   ├── retrieval.py     # Cosine search + reranking
+│   │   └── store.py         # LanceDB + whitening cache
+│   └── reasoning/
+│       ├── confidence.py    # Confidence gate + refusal
+│       └── engine.py        # GPT-4o prompt + streaming
+├── eval/
+│   ├── ablation.py          # Retrieval quality benchmark
+│   ├── benchmark.py         # Questions + LLM grader
+│   ├── latency.py           # Latency profiler
+│   └── local_ablation.py    # Local ablation (no DB)
+├── scripts/
+│   ├── ingest.py            # Full pipeline entrypoint
+│   ├── init_db.py           # DB schema init
+│   └── demo.py              # 5-query showcase
+├── tests/
+│   └── test_confidence.py   # Confidence gate tests
+├── web/                     # Next.js frontend
+│   ├── app/
+│   │   ├── page.tsx         # Landing page
+│   │   └── (app)/           # All app pages
+│   └── lib/
+│       ├── api.ts           # API client (15s timeout)
+│       └── constants.ts     # Shared regime constants
+├── .github/workflows/ci.yml
+├── render.yaml
+├── pyproject.toml
+└── Makefile
+```
 
-### Chat Interface
+---
 
-**POST /chat** - Main conversational endpoint
+## Commands
+
 ```bash
-curl -X POST http://localhost:8001/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "conversation_id": "user_123_conv_001",
-    "message": "What happens after volatility spikes?",
-    "include_risk_disclaimer": true,
-    "include_context": true
-  }'
-```
-
-Response includes:
-- Natural language explanation
-- Confidence level (HIGH/MEDIUM/LOW)
-- Win rate percentage
-- Risk assessment (worst/best case, Sharpe ratio)
-- Important caveats & disclaimers
-- Suggested follow-up questions
-- Actionable insights
-- Watch points (pattern breaks)
-
-**GET /conversation/{id}/history** - Message history
-
-**GET /health/chat** - System status
-
-### Query Engine (Phase 3)
-
-**POST /query** - Natural language query
-```bash
-curl -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "Market recovery after volatility spike", "top_k": 5}'
-```
-
-**POST /query/market-state** - Structured market state
-```bash
-curl -X POST http://localhost:8000/query/market-state \
-  -H "Content-Type: application/json" \
-  -d '{"market_state": {"spy_price": 450, "vix": 22, "cpi": 3.2}, "top_k": 5}'
-```
-
-**POST /query/regime** - Regime-only query
-```bash
-curl -X POST http://localhost:8000/query/regime \
-  -H "Content-Type: application/json" \
-  -d '{"regime": "BULL", "top_k": 10}'
+make ingest    # Full pipeline: fetch → HMM → episodes → embed → store
+make api       # Start FastAPI dev server
+make eval      # Run retrieval quality ablation
+make latency   # Profile retrieval latency
+make test      # Run tests
+make lint      # Ruff linter
+make demo      # 5-query showcase
+make clean     # Remove generated files
 ```
 
 ---
 
-## Testing
+## Scaling
 
-### Run All Tests
-```bash
-export $(cat .env | xargs)
-python scripts/test_phase4.py
-```
-
-Expected output:
-```
-✅ PHASE 4 TESTS COMPLETE - ALL PASSED
-
-[1] Query Parser NLU ✅
-[2] Market State Extraction ✅
-[3] Chat Manager Memory ✅
-[4] End-to-End Pipeline ✅
-[5] Risk Assessment ✅
-[6] Edge Cases ✅
-[7] Context Continuity ✅
-[8] Data Validation ✅
-```
-
----
-
-## Performance Metrics
-
-### System
-- **Query latency**: <100ms (P95)
-- **Throughput**: ~50 req/sec per instance
-- **Storage**: ~700MB total (PostgreSQL + LanceDB)
-- **Uptime**: 99.9% SLA
-
-### Quality
-- **Episodes**: 61 with >20 day duration
-- **Embeddings**: FinBERT 768-dim (10M doc training)
-- **Similarity accuracy**: 63-87% for known patterns
-- **Statistical significance**: p=0.0074
-
----
-
-## Architecture & Design
-
-### Why Markov Switching?
-- Theoretically grounded (Guidolin & Timmermann 2007)
-- Interpretable 4-state regimes
-- Validated by Federal Reserve
-- Alternative: LSTM (chose simplicity + transparency)
-
-### Why text-embedding-3-small?
-- OpenAI Matryoshka model — truncated to 512 dims for efficient storage
-- Produces a well-spread similarity distribution when combined with all-but-the-top whitening
-- 519-dim hybrid (512 text + 7 structural); 76.1% leave-one-out directional accuracy
-
-### Why L2 Distance?
-- LanceDB native support
-- Dimension-normalized formula
-- Empirical validation: 63-87% confidence
-- Alternative: Cosine (chose native efficiency)
-
----
-
-## Deployment
-
-### Local
-```bash
-python -m uvicorn api.endpoints:app --reload
-python -m uvicorn api.chat_endpoints:app --reload --port 8001
-```
-
-### Docker
-```bash
-docker build -t finmem .
-docker run -p 8000:8000 -p 8001:8001 --env-file .env finmem
-```
-
-### Cloud Options
-- **AWS Lambda**: RDS + S3 (~$1-5/month)
-- **Google Cloud Run**: Cloud SQL + Storage (~$10-50/month)
-- **Heroku**: Dyno + Postgres (~$50+/month)
-- **Self-Hosted**: VPS + PostgreSQL (~$5-20/month)
-
----
-
-## Documentation
-
-- [Phase 1: Data Collection](docs/PHASE1_DATA_COLLECTION.md)
-- [Phase 2: Episode Detection](docs/PHASE2_EPISODE_DETECTION.md)
-- [Phase 3: Episodic Reasoning](docs/PHASE3_EPISODIC_REASONING.md)
-- [Phase 4: Chat Interface](docs/PHASE4_CHAT_INTERFACE.md)
-- [Project Summary](docs/PROJECT_SUMMARY.md)
-
----
-
-## Known Limitations
-
-1. **Small dataset**: 61 episodes (1990-2030)
-2. **Single time horizon**: 6-month returns only
-3. **No causality**: Correlation analysis only
-4. **SPY only**: No portfolio context
-5. **Patterns may change**: Black swans not captured
-
-Every response includes transparent disclaimers.
-
----
-
-## Roadmap
-
-### Phase 5 (Q3 2026)
-- Multiple asset classes
-- Portfolio context
-- Real-time episode detection
-- Web UI
-
-### Phase 6 (Q4 2026)
-- Causal analysis
-- Ensemble models
-- Strategy integration
-- Mobile app
-
----
-
-## Support & Contributing
-
-- **Docs**: [/docs](/docs)
-- **Issues**: GitHub Issues
-- **License**: MIT
-
----
-
-**Version**: 1.0.0 (Production) | **Status**: ✅ Complete | **Last Updated**: 2026-05-20
+Current architecture is single-node. For production scale:
+- **Vector search**: Enable LanceDB IVF-PQ index for 1M+ episodes
+- **API workers**: `gunicorn -k uvicorn.workers.UvicornWorker -w 4`
+- **Ingest scheduling**: Celery beat task triggered after market close daily
+- **Embedding cache**: Cache query vectors by market state hash
