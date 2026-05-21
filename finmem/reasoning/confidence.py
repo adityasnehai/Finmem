@@ -30,4 +30,4 @@ def confidence_gate(result: QueryResult) -> tuple[bool, str]:
     if sim >= LOW_THRESHOLD:
         return True, UNCERTAIN_PREFIX.format(sim=sim)
 
-    return False, NO_ANALOG_MSG.format(sim=sim, thr=LOW_THRESHOLD)
+    return False, NO_ANALOG_MSG.format(sim=sim)

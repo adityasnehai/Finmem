@@ -32,6 +32,7 @@ interface Message {
   content: string;
   confidence?: number;
   latency_ms?: number;
+  isError?: boolean;
 }
 
 const COMMANDS = [
@@ -105,6 +106,13 @@ export default function ChatPage() {
           });
         },
       );
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Failed to connect to the API. Please try again.";
+      setMessages((prev) => {
+        const c = [...prev];
+        c[c.length - 1] = { role: "assistant", content: errMsg, isError: true };
+        return c;
+      });
     } finally {
       setLoading(false);
     }
@@ -243,11 +251,18 @@ export default function ChatPage() {
                     className={`rounded-2xl border text-sm leading-7 ${
                       m.role === "user"
                         ? "max-w-[85%] border-transparent bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] px-4 py-3 text-white shadow-[0_18px_36px_-22px_rgba(15,167,122,0.55)]"
+                        : m.isError
+                        ? "max-w-[90%] border-red-200 bg-red-50 text-red-700 shadow-none"
                         : "max-w-[90%] border-[#D7E8E0] bg-white text-[#102E25] shadow-[0_14px_36px_-30px_rgba(12,58,44,0.4)]"
                     }`}
                   >
                     {m.role === "user" ? (
                       <p className="whitespace-pre-wrap px-4 py-3">{m.content}</p>
+                    ) : m.isError ? (
+                      <div className="flex items-start gap-2 px-4 py-3">
+                        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-red-500" />
+                        <p className="text-sm">{m.content}</p>
+                      </div>
                     ) : (
                       <MessageContent content={m.content} streaming={loading && i === messages.length - 1} />
                     )}

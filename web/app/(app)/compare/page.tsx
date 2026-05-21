@@ -96,9 +96,9 @@ export default function ComparePage() {
           { metric: "CPI", "Episode 1": ep1.cpi, "Episode 2": ep2.cpi },
           { metric: "Unemployment", "Episode 1": ep1.unemployment, "Episode 2": ep2.unemployment },
           {
-            metric: "Max DD",
-            "Episode 1": Math.abs(ep1.max_drawdown),
-            "Episode 2": Math.abs(ep2.max_drawdown),
+            metric: "Max DD %",
+            "Episode 1": parseFloat((Math.abs(ep1.max_drawdown) * 100).toFixed(1)),
+            "Episode 2": parseFloat((Math.abs(ep2.max_drawdown) * 100).toFixed(1)),
           },
         ]
       : [];
@@ -184,8 +184,8 @@ export default function ComparePage() {
                 </li>
                 <li>
                   <strong className="text-[#0F2B23]">6M forward returns:</strong>{" "}
-                  Episode 1: {ep1.spy_return_6m_after != null ? `${ep1.spy_return_6m_after.toFixed(1)}%` : "—"} · Episode 2:{" "}
-                  {ep2.spy_return_6m_after != null ? `${ep2.spy_return_6m_after.toFixed(1)}%` : "—"}
+                  Episode 1: {ep1.spy_return_6m_after != null ? `${(ep1.spy_return_6m_after * 100).toFixed(1)}%` : "—"} · Episode 2:{" "}
+                  {ep2.spy_return_6m_after != null ? `${(ep2.spy_return_6m_after * 100).toFixed(1)}%` : "—"}
                 </li>
                 <li>
                   <strong className="text-[#0F2B23]">Volatility:</strong>{" "}
@@ -277,11 +277,11 @@ function EpisodeCard({ episode, label }: { episode: Episode; label: string }) {
       </div>
 
       <div className="grid gap-2">
-        <Row label="SPY return" value={`${episode.total_return.toFixed(1)}%`} positive={episode.total_return > 0} />
-        <Row label="Max drawdown" value={`${episode.max_drawdown.toFixed(1)}%`} positive={false} />
+        <Row label="SPY return" value={`${(episode.total_return * 100).toFixed(1)}%`} positive={episode.total_return > 0} />
+        <Row label="Max drawdown" value={`${(episode.max_drawdown * 100).toFixed(1)}%`} positive={false} />
         <Row
           label="6M forward"
-          value={episode.spy_return_6m_after != null ? `${episode.spy_return_6m_after.toFixed(1)}%` : "—"}
+          value={episode.spy_return_6m_after != null ? `${(episode.spy_return_6m_after * 100).toFixed(1)}%` : "—"}
           positive={episode.spy_return_6m_after != null ? episode.spy_return_6m_after > 0 : undefined}
           naTitle={episode.spy_return_6m_after == null ? "6-month outcome not yet available — this episode ended recently" : undefined}
         />

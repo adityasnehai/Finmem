@@ -6,8 +6,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setReady(true), 0);
-    return () => clearTimeout(t);
+    setReady(true);
   }, []);
 
   if (!ready) {
