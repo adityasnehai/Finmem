@@ -8,6 +8,8 @@
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
 ![CI](https://github.com/adityasnehai/Finmem/actions/workflows/ci.yml/badge.svg)
 
+> **Note on market data:** Yahoo Finance blocks cloud datacenter IPs (AWS, Render, GCP) at the network level — no workaround is reliable. The API ships with a committed `data/market_cache.parquet` generated locally. On Render, the API loads from this file on startup with no yfinance call. To refresh the data, run `python -c "from finmem.data.loaders import load_all; load_all().to_parquet('data/market_cache.parquet')"` locally and push the updated file.
+
 ---
 
 ## What is FinMem?

@@ -95,29 +95,40 @@ async def _warmup():
 
 def _warmup_sync():
     global _df
+    # Always load from committed cache first — avoids yfinance rate limits on cloud IPs.
+    # yfinance is only called when the cache is stale (last row is a past date).
+    cached = _load_cache()
+    if cached is not None:
+        _df = cached
+        if _df.index[-1].date() >= _date.today():
+            return  # cache is current, skip yfinance entirely
     try:
         _df = load_all()
         _save_cache(_df)
     except Exception as e:
-        logger.warning("yfinance unavailable on startup (%s); trying cache", e)
-        _df = _load_cache()
+        logger.warning("yfinance unavailable on startup (%s); serving from cache", e)
+        if _df is None:
+            raise RuntimeError("No market data: yfinance failed and no cache found") from e
 
 
 def get_df() -> pd.DataFrame:
     global _df
     today = _date.today()
     if _df is None or _df.index[-1].date() < today:
-        try:
-            _df = load_all()
-            _save_cache(_df)
-        except Exception as e:
-            logger.warning("yfinance unavailable (%s); using cached data", e)
-            if _df is None:
-                cached = _load_cache()
-                if cached is not None:
-                    _df = cached
-                else:
-                    raise RuntimeError("No market data available: yfinance failed and no cache found") from e
+        cached = _load_cache()
+        if cached is not None and cached.index[-1].date() >= today:
+            _df = cached
+        else:
+            try:
+                _df = load_all()
+                _save_cache(_df)
+            except Exception as e:
+                logger.warning("yfinance unavailable (%s); using cached data", e)
+                if _df is None:
+                    if cached is not None:
+                        _df = cached
+                    else:
+                        raise RuntimeError("No market data: yfinance failed and no cache found") from e
     return _df
 
 
