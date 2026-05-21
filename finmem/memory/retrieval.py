@@ -6,8 +6,11 @@ from finmem.memory.embeddings import embed_state
 from finmem.memory.store import get_table, get_whitened_state
 from finmem.memory.regime import predict_state_regime
 
-CONFIDENCE_HIGH   = 0.65
-CONFIDENCE_LOW    = 0.45
+# Thresholds calibrated for text-embedding-3-small + all-but-the-top whitening.
+# Pairwise similarity distribution across episodes: median≈0, p75≈0.22, p90≈0.42.
+# A query sim of 0.15+ is meaningful signal; 0.27+ is a strong match.
+CONFIDENCE_HIGH   = 0.27
+CONFIDENCE_LOW    = 0.15
 REGIME_BONUS      = 0.10
 RECENCY_CUTOFF_YR = 15
 RECENCY_PENALTY   = 0.05

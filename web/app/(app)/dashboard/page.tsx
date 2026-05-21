@@ -56,6 +56,7 @@ export default function Dashboard() {
   const [memory, setMemory] = useState<MemoryData | null>(null);
   const [quality, setQuality] = useState<QualityData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const didLoad = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -70,7 +71,7 @@ export default function Dashboard() {
       setMemory(memData);
       setQuality(qualityData);
     } catch (err) {
-      console.error("Dashboard load error:", err);
+      setError(err instanceof Error ? err.message : "Failed to load dashboard");
     } finally {
       setLoading(false);
     }
@@ -104,6 +105,11 @@ export default function Dashboard() {
       />
 
       <div className="flex-1 overflow-y-auto px-6 py-6 md:px-8 md:py-8">
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
         <div className="mx-auto flex max-w-7xl flex-col gap-8">
           {/* === Market State === */}
           <Section

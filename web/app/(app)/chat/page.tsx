@@ -2,7 +2,19 @@
 import { useState, useRef, useEffect } from "react";
 import { streamChat } from "@/lib/api";
 import { regimeColor } from "@/lib/constants";
-import { getUser, loadChatHistory, saveChatHistory, clearChatHistory } from "@/lib/auth";
+const CHAT_KEY = "finmem_chat";
+function loadHistory(): Message[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem(CHAT_KEY) ?? "[]"); } catch { return []; }
+}
+function saveHistory(msgs: Message[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(CHAT_KEY, JSON.stringify(msgs.slice(-200)));
+}
+function clearHistory() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(CHAT_KEY);
+}
 import {
   Send,
   MessageSquare,
@@ -39,23 +51,16 @@ const SUGGESTIONS = [
 ];
 
 export default function ChatPage() {
-  const user = getUser();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (user && !historyLoaded) {
-      const stored = loadChatHistory(user.id);
-      if (stored.length > 0) {
-        setMessages(stored.map(({ role, content, confidence, latency_ms }) => ({ role, content, confidence, latency_ms })));
-      }
-      setHistoryLoaded(true);
-    }
-  }, [user, historyLoaded]);
+    const stored = loadHistory();
+    if (stored.length > 0) setMessages(stored);
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -64,11 +69,6 @@ export default function ChatPage() {
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
-
-  function persistHistory(msgs: Message[]) {
-    if (!user) return;
-    saveChatHistory(user.id, msgs.map((m) => ({ ...m, ts: Date.now() })));
-  }
 
   async function send(text?: string) {
     const msg = (text ?? input).trim();
@@ -100,7 +100,7 @@ export default function ChatPage() {
               latency_ms: meta.latency_ms,
             };
             c[c.length - 1] = finalMsg;
-            persistHistory(c);
+            saveHistory(c);
             return c;
           });
         },
@@ -110,9 +110,9 @@ export default function ChatPage() {
     }
   }
 
-  function clearHistory() {
+  function handleClearHistory() {
     setMessages([]);
-    if (user) clearChatHistory(user.id);
+    clearHistory();
   }
 
   const isEmpty = messages.length === 0;
@@ -140,16 +140,16 @@ export default function ChatPage() {
                 Reasoning…
               </span>
             )}
-            {user && !isEmpty && (
+            {!isEmpty && (
               <span className="inline-flex items-center gap-1.5 rounded-md border border-[#D7E8E0] bg-[#F8FCFA] px-2.5 py-1 text-[11px] text-[#5A736A]">
                 <History size={11} className="text-[#0A8A67]" />
-                Saved to your account
+                Saved locally
               </span>
             )}
             {!isEmpty && !loading && (
               <button
                 type="button"
-                onClick={clearHistory}
+                onClick={handleClearHistory}
                 className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#D7E8E0] bg-white px-3 text-xs font-semibold text-[#5A736A] transition hover:border-[#F4C7CC] hover:text-[#B91C1C]"
               >
                 <Trash2 size={12} /> Clear
@@ -304,9 +304,7 @@ export default function ChatPage() {
             </button>
           </form>
           <p className="mt-2 text-center text-[11px] text-[#7A938A]">
-            {user
-              ? "History saved to your account · Answers include cited episodes and a confidence score"
-              : "Browsing as guest — history not saved · Sign in to keep your chats"}
+            Answers include cited historical episodes and a confidence score
           </p>
         </div>
       </div>

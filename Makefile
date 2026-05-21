@@ -1,31 +1,13 @@
-.PHONY: install db-init db-ingest db-update phase2 phase2-detect phase2-embed phase2-index chat dashboard watch eval latency demo test lint clean
+.PHONY: install ingest api chat dashboard watch eval latency demo test lint clean
 
 install:
 	pip install -e ".[dev]"
 
-db-init:
-	python scripts/init_db.py
-
-db-ingest:
-	python scripts/ingest_market_data.py
-
-db-update:
-	python scripts/ingest_market_data.py
-
-phase2:
-	cd scripts && python run_phase2.py
-
-phase2-detect:
-	python scripts/detect_episodes.py
-
-phase2-embed:
-	python scripts/create_embeddings.py
-
-phase2-index:
-	python scripts/index_lancedb.py
-
 ingest:
 	python scripts/ingest.py
+
+api:
+	uvicorn api.main:app --reload --port 8000
 
 chat:
 	python -m finmem.interface.chat chat

@@ -62,8 +62,8 @@ export default function ComparePage() {
       try {
         const data = await fetchCompareEpisodes(selected[0], selected[1]);
         setComparison(data);
-      } catch (err) {
-        console.error("Failed to load comparison", err);
+      } catch {
+        // comparison unavailable — UI shows empty state
       }
     }
     loadComparison();

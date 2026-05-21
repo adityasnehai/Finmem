@@ -20,12 +20,11 @@ def get_whitened_state() -> tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarr
     Returns (whitened_vecs, df, mean_vec, top_pcs).
 
     Applies all-but-the-top postprocessing (Mu & Viswanath, ICLR 2018) to the
-    stored 391-dim hybrid embeddings. Removes the dominant principal component —
-    the global 'this is a financial episode' direction — and re-normalises,
-    producing an isotropic embedding space where cosine similarity actually
-    discriminates between episodes.
+    stored 519-dim hybrid embeddings (512-dim Matryoshka text + 7 structural).
+    Removes the dominant principal component — the global 'financial episode'
+    direction — and re-normalises, producing an isotropic space where cosine
+    similarity is actually discriminative.
 
-    Measured improvement on leave-one-out: 69.0% → 74.7% directional accuracy.
     Cached in memory; invalidated by store_episodes().
     """
     global _whitened_cache

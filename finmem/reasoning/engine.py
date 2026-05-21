@@ -3,7 +3,7 @@ from openai import OpenAI
 from finmem.data.schemas import QueryResult
 from finmem.reasoning.confidence import confidence_gate
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=30.0)
 
 SYSTEM_PROMPT = """You are FinMem, a financial historian with access to a structured episodic memory of market history.
 

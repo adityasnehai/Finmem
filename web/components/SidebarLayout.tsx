@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard,
@@ -9,14 +9,11 @@ import {
   BarChart3,
   Activity,
   CircleDot,
-  LogOut,
-  Zap,
   Gauge,
   Shield,
   Menu,
   X,
 } from "lucide-react";
-import { getUser, clearAuth } from "@/lib/auth";
 
 const NAV_PRIMARY = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -27,29 +24,13 @@ const NAV_RESEARCH = [
   { href: "/memory", icon: Database, label: "Memory" },
   { href: "/chat", icon: MessageSquare, label: "Chat" },
   { href: "/analytics", icon: BarChart3, label: "Analytics" },
-  { href: "/insights", icon: Zap, label: "Insights" },
 ];
 
 const NAV_SYSTEM = [{ href: "/data", icon: Shield, label: "Data" }];
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const router = useRouter();
-  const user = getUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const initials = user?.name
-    ? user.name
-        .split(" ")
-        .map((p) => p[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase()
-    : user?.email?.slice(0, 2).toUpperCase() ?? "?";
-
-  function logout() {
-    clearAuth();
-    router.replace("/");
-  }
 
   function renderNavItem({ href, icon: Icon, label }: { href: string; icon: React.ElementType; label: string }) {
     const active = path.startsWith(href);
@@ -116,40 +97,25 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           {/* Brand */}
           <div className="border-b border-[#D7E8E0] px-5 py-5">
             <div className="flex items-center justify-between">
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <div>
-                <p className="font-[var(--font-heading)] text-base font-bold tracking-[-0.02em] text-[#0F2B23]">
-                  FinMem
-                </p>
-                <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[#7A938A]">
-                  Research Workspace
-                </p>
-              </div>
-            </Link>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#5A736A] hover:bg-[#F2FAF6] md:hidden"
-              aria-label="Close sidebar"
-            >
-              <X size={16} />
-            </button>
+              <Link href="/dashboard" className="flex items-center gap-2">
+                <div>
+                  <p className="font-[var(--font-heading)] text-base font-bold tracking-[-0.02em] text-[#0F2B23]">
+                    FinMem
+                  </p>
+                  <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[#7A938A]">
+                    Research Workspace
+                  </p>
+                </div>
+              </Link>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#5A736A] hover:bg-[#F2FAF6] md:hidden"
+                aria-label="Close sidebar"
+              >
+                <X size={16} />
+              </button>
             </div>
           </div>
-
-          {/* User card — only shown when authenticated */}
-          {user && (
-            <div className="px-4 pt-4">
-              <div className="flex items-center gap-3 rounded-xl border border-[#D7E8E0] bg-[#F8FCFA] p-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] text-[11px] font-bold text-white shadow-[0_10px_22px_-15px_rgba(15,167,122,0.65)]">
-                  {initials}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-[#0F2B23]">{user.name || user.email}</p>
-                  <p className="truncate text-xs text-[#5A736A]">{user.email}</p>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Nav */}
           <nav className="flex-1 overflow-y-auto px-4 py-5">
@@ -166,29 +132,13 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               <div className="flex items-center gap-2">
                 <CircleDot size={11} className="text-[#0A8A67]" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#5A736A]">
-                  {user ? "Authenticated" : "Guest session"}
+                  Live workspace
                 </span>
               </div>
               <div className="mt-2 flex items-center gap-2 text-[11px] text-[#5A736A]">
                 <Activity size={11} className="text-[#1AADB0]" />
                 <span>yfinance · FRED · LanceDB</span>
               </div>
-
-              {user ? (
-                <button
-                  onClick={logout}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-[#D7E8E0] bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5A736A] transition hover:border-[#F4C7CC] hover:bg-[#FFF1F2] hover:text-[#B91C1C]"
-                >
-                  <LogOut size={12} /> Sign Out
-                </button>
-              ) : (
-                <Link
-                  href="/"
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white shadow-[0_12px_24px_-15px_rgba(15,167,122,0.55)] transition hover:brightness-95"
-                >
-                  Explore Homepage
-                </Link>
-              )}
             </div>
           </div>
         </div>

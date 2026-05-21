@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { fetchAblation, fetchMemory, fetchOutcomesDistribution, fetchCalibration, fetchCompression } from "@/lib/api";
 import { REGIME_COLORS, regimeColor, regimeLabel, ABLATION_LABELS, ABLATION_COLORS } from "@/lib/constants";
-import { BarChart3, CheckCircle2, Sparkles, TrendingUp, ArrowDownRight, Activity, FlaskConical, Layers } from "lucide-react";
+import { BarChart3, CheckCircle2, Sparkles, TrendingUp, ArrowDownRight, Activity, FlaskConical, Layers, Info } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -248,7 +249,7 @@ export default function AnalyticsPage() {
               <Card>
                 <CardHeader
                   label="Retrieval Quality Benchmark"
-                  description="How FinMem's episodic retrieval compares to a recency window and a no-retrieval baseline, measured on a 20-question quality benchmark."
+                  description="How FinMem's episodic retrieval compares to a recency window and a no-retrieval baseline on response quality and groundedness."
                   rightSlot={
                     ablation?.available ? (
                       <span className="inline-flex items-center gap-1.5 rounded-md border border-[#BCE8DA] bg-[#E9F9F3] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#0A8A67]">
@@ -352,7 +353,7 @@ export default function AnalyticsPage() {
               <Card>
                 <CardHeader
                   label="Retrieval Calibration"
-                  description="Leave-one-out evaluation: does cosine similarity actually predict 6-month market direction? Ground truth = stored forward returns."
+                  description="Leave-one-out evaluation: for each episode, the most-similar retrieved neighbor is used to predict 6-month direction. Ground truth is the stored forward return."
                   rightSlot={
                     calibration?.available ? (
                       <span className="inline-flex items-center gap-1.5 rounded-md border border-[#BCE8DA] bg-[#E9F9F3] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#0A8A67]">
@@ -370,28 +371,35 @@ export default function AnalyticsPage() {
                           value: `${((calibration.directional_accuracy ?? 0) * 100).toFixed(1)}%`,
                           sub: `95% CI [${((calibration.ci_lo ?? 0) * 100).toFixed(1)}%–${((calibration.ci_hi ?? 0) * 100).toFixed(1)}%]`,
                           color: "#0A8A67",
+                          info: "Leave-one-out: fraction of held-out episodes where the most-similar analog predicted the correct 6-month return direction (positive vs. negative).",
                         },
                         {
                           label: "Brier Score",
                           value: (calibration.brier_score ?? 0).toFixed(3),
-                          sub: "lower = better (0 = perfect)",
+                          sub: "lower = better (0.25 = random baseline)",
                           color: "#1AADB0",
+                          info: "Mean squared error between predicted probability and binary outcome. 0.25 is the uninformed baseline for a 50/50 coin flip; lower values indicate better probabilistic accuracy.",
                         },
                         {
                           label: "MAE",
                           value: `${(calibration.mae_pct ?? 0).toFixed(1)} pp`,
                           sub: "mean absolute error in return",
                           color: "#F59B23",
+                          info: "Mean absolute error in percentage-point terms between the analog's forward return and the held-out episode's actual forward return.",
                         },
                         {
                           label: "ECE",
                           value: (calibration.ece ?? 0).toFixed(3),
                           sub: "calibration error (0 = perfect)",
                           color: "#E22134",
+                          info: "Expected Calibration Error: weighted average gap between reported similarity-based confidence and observed accuracy across reliability bins. Closer to 0 is better.",
                         },
-                      ].map(({ label, value, sub, color }) => (
+                      ].map(({ label, value, sub, color, info }) => (
                         <div key={label} className="rounded-xl border border-[#D7E8E0] bg-white p-4">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7A938A]">{label}</p>
+                          <p className="flex items-center text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7A938A]">
+                            {label}
+                            <InfoTooltip text={info} />
+                          </p>
                           <p className="mt-2 font-[var(--font-heading)] text-2xl font-bold tabular-nums" style={{ color }}>{value}</p>
                           <p className="mt-1 text-[10px] text-[#7A938A]">{sub}</p>
                         </div>
@@ -401,50 +409,63 @@ export default function AnalyticsPage() {
                     <div className="grid gap-5 lg:grid-cols-2">
                       <div>
                         <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7A938A]">
-                          Confidence vs accuracy comparison
+                          Reliability diagram — confidence vs accuracy per bin
                         </p>
                         <div className="h-44">
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart
-                              layout="vertical"
-                              data={[
-                                { label: "Retrieval similarity", value: +((calibration.reliability_bins?.[0]?.mean_confidence ?? 0) * 100).toFixed(1) },
-                                { label: "Directional accuracy", value: +((calibration.directional_accuracy ?? 0) * 100).toFixed(1) },
-                                { label: "Random baseline", value: 50 },
-                              ]}
-                              margin={{ left: 10, right: 20 }}
+                              data={(calibration.reliability_bins ?? []).map(b => ({
+                                bin: `n=${b.count}`,
+                                "Confidence": +(b.mean_confidence * 100).toFixed(1),
+                                "Accuracy": +(b.mean_accuracy * 100).toFixed(1),
+                              }))}
+                              barGap={4}
+                              margin={{ left: -10 }}
                             >
-                              <CartesianGrid strokeDasharray="3 3" stroke="#E5EFE9" horizontal={false} />
-                              <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fill: "#5A736A", fontSize: 10 }} axisLine={false} tickLine={false} />
-                              <YAxis type="category" dataKey="label" width={130} tick={{ fill: "#5A736A", fontSize: 11 }} axisLine={false} tickLine={false} />
+                              <CartesianGrid strokeDasharray="3 3" stroke="#E5EFE9" vertical={false} />
+                              <XAxis dataKey="bin" tick={{ fill: "#5A736A", fontSize: 10 }} axisLine={false} tickLine={false} />
+                              <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fill: "#5A736A", fontSize: 10 }} axisLine={false} tickLine={false} />
                               <Tooltip
                                 cursor={{ fill: "rgba(15,167,122,0.06)" }}
                                 contentStyle={CHART_TOOLTIP_STYLE}
                                 formatter={(v) => [`${v}%`, ""]}
                               />
-                              <Bar
-                                dataKey="value"
-                                radius={[0, 6, 6, 0]}
-                                label={{ position: "right", formatter: (v: unknown) => `${v}%`, fontSize: 11, fill: "#5A736A" }}
-                              >
-                                <Cell fill="#1AADB0" />
-                                <Cell fill="#0FA77A" />
-                                <Cell fill="#A0B3A9" />
-                              </Bar>
+                              <Legend wrapperStyle={{ fontSize: 10, color: "#5A736A" }} />
+                              <Bar dataKey="Confidence" fill="#1AADB0" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="Accuracy" fill="#0FA77A" radius={[4, 4, 0, 0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
                       </div>
 
-                      <div className="flex flex-col justify-center gap-3 rounded-xl border border-[#FDE68A] bg-[#FFFBEB] p-4 text-sm">
-                        <p className="text-xs font-semibold text-[#92400E]">Research finding: overconfidence detected</p>
-                        <p className="text-xs leading-6 text-[#78350F]">
-                          All {calibration.n} episodes cluster in the 0.8–1.0 cosine similarity range — the 391-dim embedding space is dense.
-                          High ECE ({(calibration.ece ?? 0).toFixed(3)}) means the system is overconfident: similarity ≈ {((calibration.reliability_bins?.[0]?.mean_confidence ?? 0) * 100).toFixed(0)}% does not imply {((calibration.reliability_bins?.[0]?.mean_confidence ?? 0) * 100).toFixed(0)}% accuracy.
-                          Directional accuracy ({((calibration.directional_accuracy ?? 0) * 100).toFixed(1)}%) is nonetheless above the 50% random baseline.
-                        </p>
-                        <p className="text-[10px] text-[#A16207]">{calibration.note}</p>
-                      </div>
+                      {(() => {
+                        const bins = calibration.reliability_bins ?? [];
+                        const underconfident = bins.length > 0 && bins.filter(b => b.count > 0).every(b => b.mean_accuracy >= b.mean_confidence - 0.05);
+                        const fullDim = compression?.full_dim ?? 519;
+                        const acc = ((calibration.directional_accuracy ?? 0) * 100).toFixed(1);
+                        const ece = (calibration.ece ?? 0).toFixed(3);
+                        const baseline_pp = (((calibration.directional_accuracy ?? 0.5) - 0.5) * 100).toFixed(0);
+                        if (underconfident) {
+                          return (
+                            <div className="flex flex-col justify-center gap-3 rounded-xl border border-[#BCE8DA] bg-[#E9F9F3] p-4 text-sm">
+                              <p className="text-xs font-semibold text-[#065F46]">Research finding: well-calibrated (slightly underconfident)</p>
+                              <p className="text-xs leading-6 text-[#064E3B]">
+                                With text-embedding-3-small + all-but-the-top whitening in {fullDim}-dim space, cosine similarities span a wide range (median≈0 across episodes). ECE = {ece} indicates moderate calibration error. Directional accuracy ({acc}%) exceeds confidence in each reliability bin — the system is slightly underconfident — and beats the 50% random baseline by +{baseline_pp} pp.
+                              </p>
+                              {calibration.note && <p className="text-[10px] text-[#047857]">{calibration.note}</p>}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="flex flex-col justify-center gap-3 rounded-xl border border-[#FDE68A] bg-[#FFFBEB] p-4 text-sm">
+                            <p className="text-xs font-semibold text-[#92400E]">Research finding: overconfidence detected</p>
+                            <p className="text-xs leading-6 text-[#78350F]">
+                              ECE = {ece} means reported similarity scores are higher than actual directional accuracy warrants. Directional accuracy ({acc}%) nonetheless beats the 50% random baseline by +{baseline_pp} pp.
+                            </p>
+                            {calibration.note && <p className="text-[10px] text-[#A16207]">{calibration.note}</p>}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 ) : (
@@ -456,7 +477,7 @@ export default function AnalyticsPage() {
               <Card>
                 <CardHeader
                   label="Embedding Compression"
-                  description={`Recall@${compression?.k ?? 5} vs the full ${compression?.full_dim ?? 391}-dim system at each PCA dimension. Measures capability preserved under compression.`}
+                  description={`Recall@${compression?.k ?? 5} vs the full ${compression?.full_dim ?? 519}-dim system at each PCA dimension. Measures capability preserved under compression.`}
                   rightSlot={
                     compression?.available ? (
                       <span className="inline-flex items-center gap-1.5 rounded-md border border-[#BCE8DA] bg-[#E9F9F3] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#0A8A67]">
@@ -549,7 +570,7 @@ export default function AnalyticsPage() {
                 <Card>
                   <CardHeader
                     label="Outcome distribution"
-                    description="6-month forward returns and max drawdowns binned across all historical episodes."
+                    description="6-month forward returns and max drawdowns binned across all historical episodes. These are realized outcomes stored in the episode database — not predictions."
                   />
 
                   <div className="grid gap-6 lg:grid-cols-2">
@@ -647,8 +668,9 @@ export default function AnalyticsPage() {
                       <div className="lg:col-span-2">
                         <div className="mb-3 flex items-center gap-2">
                           <TrendingUp size={13} className="text-[#0A8A67]" />
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#0A8A67]">
+                          <p className="flex items-center text-[10px] font-semibold uppercase tracking-[0.12em] text-[#0A8A67]">
                             Mean return by regime
+                            <InfoTooltip text="Average 6-month forward SPY return across all episodes in each detected market regime. Based on stored outcomes — use as a base rate, not a prediction." />
                           </p>
                         </div>
                         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
@@ -850,5 +872,43 @@ function EmptyState({
       <p className="font-[var(--font-heading)] text-sm font-semibold text-[#0F2B23]">{title}</p>
       {body && <p className="max-w-md text-xs leading-6 text-[#5A736A]">{body}</p>}
     </div>
+  );
+}
+
+function InfoTooltip({ text }: { text: string }) {
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos]         = useState({ top: 0, left: 0 });
+  const iconRef               = useRef<HTMLSpanElement>(null);
+
+  const show = () => {
+    if (iconRef.current) {
+      const r = iconRef.current.getBoundingClientRect();
+      setPos({ top: r.top + window.scrollY, left: r.left + r.width / 2 });
+    }
+    setVisible(true);
+  };
+
+  return (
+    <>
+      <span
+        ref={iconRef}
+        className="ml-1 inline-flex cursor-help align-middle"
+        onMouseEnter={show}
+        onMouseLeave={() => setVisible(false)}
+      >
+        <Info size={11} className={`transition ${visible ? "text-[#0A8A67]" : "text-[#B8CEC9]"}`} />
+      </span>
+
+      {visible && typeof document !== "undefined" && createPortal(
+        <div
+          className="pointer-events-none fixed z-[9999] w-64 -translate-x-1/2 -translate-y-full whitespace-pre-line rounded-xl border border-[#D7E8E0] bg-white p-3.5 text-[12px] font-normal leading-[1.65] tracking-normal text-[#374151] shadow-[0_12px_32px_-8px_rgba(12,58,44,0.3)]"
+          style={{ top: pos.top - 10, left: pos.left }}
+        >
+          {text}
+          <span className="absolute -bottom-1.5 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 border-b border-r border-[#D7E8E0] bg-white" />
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }

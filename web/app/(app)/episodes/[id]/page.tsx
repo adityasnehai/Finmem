@@ -53,7 +53,7 @@ interface Precursor {
 export default function EpisodeDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const episodeId = parseInt(params.id as string);
+  const episodeId = params.id as string;
 
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [precursor, setPrecursor] = useState<Precursor | null>(null);

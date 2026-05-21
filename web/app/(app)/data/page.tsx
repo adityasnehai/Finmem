@@ -37,8 +37,8 @@ export default function DataQualityPage() {
       try {
         const data = await fetchDataQuality();
         setQuality(data);
-      } catch (err) {
-        console.error("Failed to load data quality", err);
+      } catch {
+        // data quality unavailable — UI shows empty state
       } finally {
         setLoading(false);
       }

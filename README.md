@@ -228,11 +228,10 @@ Expected output:
 - Validated by Federal Reserve
 - Alternative: LSTM (chose simplicity + transparency)
 
-### Why FinBERT?
-- Finance-trained on 10M documents
-- Understands market semantics
-- 768-dimensional (richer than 384-dim)
-- Alternative: all-MiniLM (chose domain-specific)
+### Why text-embedding-3-small?
+- OpenAI Matryoshka model — truncated to 512 dims for efficient storage
+- Produces a well-spread similarity distribution when combined with all-but-the-top whitening
+- 519-dim hybrid (512 text + 7 structural); 76.1% leave-one-out directional accuracy
 
 ### Why L2 Distance?
 - LanceDB native support

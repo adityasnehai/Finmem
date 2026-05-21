@@ -59,19 +59,19 @@ export default function MemoryPage() {
         ].join(","),
         ...data.episodes.map((ep: Record<string, unknown>) =>
           [
-            ep.start_date,
-            ep.end_date,
+            `="${ep.start_date}"`,
+            `="${ep.end_date}"`,
             ep.duration_days,
             ep.regime,
-            ep["spy_return_%"],
-            ep["max_drawdown_%"],
-            ep["spy_return_6m_after_%"],
-            ep.vix_avg,
-            ep["cpi_%"],
-            ep["fed_rate_%"],
-            ep["yield_spread_%"],
-            ep["unemployment_%"],
-            `"${String(ep.summary).replace(/"/g, '""')}"`,
+            ep["spy_return_%"] ?? "",
+            ep["max_drawdown_%"] ?? "",
+            ep["spy_return_6m_after_%"] ?? "",
+            ep.vix_avg ?? "",
+            ep["cpi_%"] ?? "",
+            ep["fed_rate_%"] ?? "",
+            ep["yield_spread_%"] ?? "",
+            ep["unemployment_%"] ?? "",
+            `"${String(ep.summary ?? "").replace(/"/g, '""')}"`,
           ].join(","),
         ),
       ].join("\n");
@@ -344,7 +344,7 @@ export default function MemoryPage() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            router.push(`/episodes/${i}`);
+                            router.push(`/episodes/${ep.id}`);
                           }}
                           className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D7E8E0] text-[#0A8A67] transition hover:border-[#BCE8DA] hover:bg-[#F2FAF6]"
                           title="View details"

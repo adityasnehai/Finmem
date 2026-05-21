@@ -2,30 +2,36 @@ import os
 import sys
 import json
 import math
-import uuid
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
+def _check_env() -> None:
+    missing = [k for k in ("OPENAI_API_KEY",) if not os.environ.get(k)]
+    if missing:
+        raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
+
+
 def _clean(v):
-    """Replace NaN/Inf with None for JSON serialization."""
     if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
         return None
     return v
 
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from jose import jwt, JWTError
-from passlib.context import CryptContext
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 load_dotenv()
+_check_env()
 
 from finmem.data.loaders import load_all
 from finmem.data.schemas import MarketState
@@ -39,18 +45,23 @@ import pandas as pd
 import numpy as np
 from datetime import date as _date
 
+_ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "http://localhost:3000")
+
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="FinMem API", version="1.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[_ALLOWED_ORIGIN],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 _df: pd.DataFrame | None = None
-_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=30.0)
 
 
 @app.on_event("startup")
@@ -114,6 +125,7 @@ def get_state():
     for r in result.retrieved:
         ep = r.episode
         episodes.append({
+            "id":                 ep.id,
             "start_date":         str(ep.start_date),
             "end_date":           str(ep.end_date),
             "regime":             ep.regime,
@@ -215,7 +227,8 @@ class ChatRequest(BaseModel):
 
 
 @app.post("/api/chat/stream")
-async def chat_stream(req: ChatRequest):
+@limiter.limit("10/minute")
+async def chat_stream(request: Request, req: ChatRequest):
     df     = get_df()
     state  = latest_state(df)
     result = retrieve(state)
@@ -324,25 +337,76 @@ def list_all_episodes(
     return {"episodes": rows, "count": len(rows)}
 
 
-@app.get("/api/episodes/{episode_id}")
-def get_episode_detail(episode_id: int):
-    """Get detailed view of a single episode"""
+@app.get("/api/episodes/export")
+def export_episodes(regime: str | None = Query(None)):
+    """Export episodes data for download — must be before /{episode_id} to avoid route collision"""
     try:
         tbl = get_table()
         df_ep = tbl.to_pandas()
     except Exception:
         raise HTTPException(503, "Memory not initialized")
 
-    # Match by row index or id column
-    if episode_id < len(df_ep):
-        row = df_ep.iloc[episode_id]
-    else:
-        if "id" in df_ep.columns:
-            matches = df_ep[df_ep["id"] == episode_id]
-            if matches.empty:
-                raise HTTPException(404, "Episode not found")
+    if regime is not None:
+        df_ep = df_ep[df_ep["regime"] == regime.upper()]
+
+    rows = []
+    for _, row in df_ep.iterrows():
+        rows.append({
+            "start_date": str(row["start_date"]),
+            "end_date": str(row["end_date"]),
+            "duration_days": (pd.to_datetime(row["end_date"]) - pd.to_datetime(row["start_date"])).days,
+            "regime": row["regime"],
+            "spy_return_%": round(float(row["total_return"]) * 100, 2),
+            "max_drawdown_%": round(float(row["max_drawdown"]) * 100, 2),
+            "spy_return_6m_after_%": round(float(row["spy_return_6m_after"]) * 100, 2) if row["spy_return_6m_after"] else None,
+            "vix_avg": round(float(row["vix_level"]), 1),
+            "cpi_%": round(float(row["cpi"]), 1),
+            "fed_rate_%": round(float(row["fed_rate"]), 2),
+            "yield_spread_%": round(float(row["yield_spread"]), 2),
+            "unemployment_%": round(float(row["unemployment"]), 1),
+            "summary": row["prose_summary"][:200] if row["prose_summary"] else "",
+        })
+
+    return {
+        "episodes": rows,
+        "count": len(rows),
+        "regime_filter": regime or "ALL",
+        "export_date": datetime.now().isoformat(),
+    }
+
+
+@app.get("/api/episodes/{episode_id}")
+def get_episode_detail(episode_id: str):
+    """Get detailed view of a single episode by UUID or row index"""
+    try:
+        tbl = get_table()
+        df_ep = tbl.to_pandas()
+    except Exception:
+        raise HTTPException(503, "Memory not initialized")
+
+    # Match by id column (UUID) first, fall back to row index for backwards compat
+    if "id" in df_ep.columns:
+        matches = df_ep[df_ep["id"] == episode_id]
+        if not matches.empty:
             row = matches.iloc[0]
         else:
+            # Try as integer row index fallback
+            try:
+                idx = int(episode_id)
+                if idx < len(df_ep):
+                    row = df_ep.iloc[idx]
+                else:
+                    raise HTTPException(404, "Episode not found")
+            except ValueError:
+                raise HTTPException(404, "Episode not found")
+    else:
+        try:
+            idx = int(episode_id)
+            if idx < len(df_ep):
+                row = df_ep.iloc[idx]
+            else:
+                raise HTTPException(404, "Episode not found")
+        except ValueError:
             raise HTTPException(404, "Episode not found")
 
     # Calculate multi-timeframe returns if not already in database
@@ -418,7 +482,7 @@ def compare_episodes(id1: int, id2: int):
 
 
 @app.get("/api/episodes/{episode_id}/precursors")
-def get_episode_precursors(episode_id: int):
+def get_episode_precursors(episode_id: str):
     """Get precursor/indicator data for specific episode (what preceded this shift)"""
     try:
         from api.query_engine import QueryEngine
@@ -598,44 +662,6 @@ def get_outcomes_distribution(regime: str | None = Query(None)):
     }
 
 
-@app.get("/api/episodes/export")
-def export_episodes(regime: str | None = Query(None)):
-    """Export episodes data for download"""
-    try:
-        tbl = get_table()
-        df_ep = tbl.to_pandas()
-    except Exception:
-        raise HTTPException(503, "Memory not initialized")
-
-    if regime is not None:
-        df_ep = df_ep[df_ep["regime"] == regime.upper()]
-
-    # Format for export
-    rows = []
-    for _, row in df_ep.iterrows():
-        rows.append({
-            "start_date": str(row["start_date"]),
-            "end_date": str(row["end_date"]),
-            "duration_days": (pd.to_datetime(row["end_date"]) - pd.to_datetime(row["start_date"])).days,
-            "regime": row["regime"],
-            "spy_return_%": round(float(row["total_return"]) * 100, 2),
-            "max_drawdown_%": round(float(row["max_drawdown"]) * 100, 2),
-            "spy_return_6m_after_%": round(float(row["spy_return_6m_after"]) * 100, 2) if row["spy_return_6m_after"] else None,
-            "vix_avg": round(float(row["vix_level"]), 1),
-            "cpi_%": round(float(row["cpi"]), 1),
-            "fed_rate_%": round(float(row["fed_rate"]), 2),
-            "yield_spread_%": round(float(row["yield_spread"]), 2),
-            "unemployment_%": round(float(row["unemployment"]), 1),
-            "summary": row["prose_summary"][:200] if row["prose_summary"] else "",
-        })
-
-    # Return as JSON (frontend will convert to CSV or PDF)
-    return {
-        "episodes": rows,
-        "count": len(rows),
-        "regime_filter": regime or "ALL",
-        "export_date": datetime.now().isoformat(),
-    }
 
 
 @app.get("/api/data-quality")
@@ -830,9 +856,9 @@ def get_calibration():
 @app.get("/api/eval/compression")
 def get_compression():
     """
-    PCA compression ablation on the stored 391-dim hybrid embeddings.
+    PCA compression ablation on the stored 519-dim hybrid embeddings
+    (512-dim Matryoshka text-embedding-3-small + 7 structural features).
     Measures Recall@K vs full system and directional accuracy at each compressed dimension.
-    PCA n_components capped at min(N-1, features) = min(71, 391) = 71 for this dataset.
     """
     from sklearn.decomposition import PCA
     import time
@@ -928,77 +954,3 @@ def get_compression():
         "note": f"Recall@{K} vs full {full_dim}-dim system. PCA on stored normalized embeddings. Latency = single N-episode cosine scan.",
     }
 
-
-# ── AUTH ──────────────────────────────────────────────────────────────────────
-
-JWT_SECRET  = os.environ.get("JWT_SECRET", "finmem-jwt-secret-key-change-in-prod")
-JWT_ALG     = "HS256"
-TOKEN_DAYS  = 30
-USERS_FILE  = Path(__file__).parent.parent / "data" / "users.json"
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-def _load_users() -> list[dict]:
-    if not USERS_FILE.exists():
-        USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        return []
-    with open(USERS_FILE) as f:
-        return json.load(f).get("users", [])
-
-
-def _save_users(users: list[dict]) -> None:
-    with open(USERS_FILE, "w") as f:
-        json.dump({"users": users}, f, indent=2)
-
-
-def _make_token(user_id: str, email: str, name: str) -> str:
-    exp = datetime.utcnow() + timedelta(days=TOKEN_DAYS)
-    return jwt.encode(
-        {"sub": user_id, "email": email, "name": name, "exp": exp},
-        JWT_SECRET, algorithm=JWT_ALG,
-    )
-
-
-class RegisterRequest(BaseModel):
-    name: str
-    email: str
-    password: str
-
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
-@app.post("/auth/register")
-def register(req: RegisterRequest):
-    users = _load_users()
-    email = req.email.strip().lower()
-    if any(u["email"] == email for u in users):
-        raise HTTPException(400, "Email already registered.")
-    if len(req.password) < 8:
-        raise HTTPException(400, "Password must be at least 8 characters.")
-    uid  = str(uuid.uuid4())
-    user = {"id": uid, "name": req.name.strip(), "email": email,
-            "hashed_password": pwd_context.hash(req.password)}
-    users.append(user)
-    _save_users(users)
-    return {
-        "access_token": _make_token(uid, email, user["name"]),
-        "token_type": "bearer",
-        "user": {"id": uid, "name": user["name"], "email": email},
-    }
-
-
-@app.post("/auth/login")
-def login(req: LoginRequest):
-    users = _load_users()
-    email = req.email.strip().lower()
-    user  = next((u for u in users if u["email"] == email), None)
-    if not user or not pwd_context.verify(req.password, user["hashed_password"]):
-        raise HTTPException(401, "Invalid email or password.")
-    return {
-        "access_token": _make_token(user["id"], email, user["name"]),
-        "token_type": "bearer",
-        "user": {"id": user["id"], "name": user["name"], "email": email},
-    }
