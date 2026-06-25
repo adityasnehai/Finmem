@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus_Jakarta_Sans, Sora } from "next/font/google";
 import {
   ArrowRight,
   BarChart3,
@@ -20,15 +19,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-const bodyFont = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-});
-
-const headingFont = Sora({
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-});
+const bodyFontClass = "font-[var(--font-sans)]";
+const headingFontClass = "font-[var(--font-heading)]";
 
 const NAV_ITEMS = [
   { label: "How it works", href: "#workflow" },
@@ -194,7 +186,7 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
       >
-        <span className={`${headingFont.className} text-sm font-semibold text-[#13352B]`}>{question}</span>
+        <span className={`${headingFontClass} text-sm font-semibold text-[#13352B]`}>{question}</span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-[#5E746B] transition ${open ? "rotate-180" : ""}`} />
       </button>
       {open && <p className="px-5 pb-5 text-sm leading-7 text-[#4D665D]">{answer}</p>}
@@ -880,7 +872,7 @@ export default function LandingPage() {
   }, [mobileOpen]);
 
   return (
-    <div className={`${bodyFont.className} relative min-h-screen overflow-x-hidden bg-[#F4FAF7] text-[#102E25]`}>
+    <div className={`${bodyFontClass} relative min-h-screen overflow-x-hidden bg-[#F4FAF7] text-[#102E25]`}>
       <style jsx global>{`
         @keyframes driftA { 0%,100%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(32px,-20px,0) scale(1.07)} }
         @keyframes driftB { 0%,100%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(-24px,22px,0) scale(1.1)} }
@@ -922,7 +914,7 @@ export default function LandingPage() {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] shadow-[0_6px_14px_-6px_rgba(15,167,122,0.6)]">
               <TrendingUp className="h-3.5 w-3.5 text-white" />
             </span>
-            <span className={`${headingFont.className} text-lg font-bold text-[#0F2B23]`}>FinMem</span>
+            <span className={`${headingFontClass} text-lg font-bold text-[#0F2B23]`}>FinMem</span>
           </button>
 
           {/* Desktop nav */}
@@ -938,7 +930,7 @@ export default function LandingPage() {
           <div className="hidden items-center lg:flex">
             <Link
               href="/dashboard"
-              className={`${headingFont.className} inline-flex h-9 items-center gap-1.5 rounded-lg bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] px-4 text-sm font-semibold text-white shadow-[0_10px_22px_-10px_rgba(15,167,122,0.7)] transition hover:brightness-95`}
+              className={`${headingFontClass} inline-flex h-9 items-center gap-1.5 rounded-lg bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] px-4 text-sm font-semibold text-white shadow-[0_10px_22px_-10px_rgba(15,167,122,0.7)] transition hover:brightness-95`}
             >
               Open Workspace
               <ArrowRight className="h-3.5 w-3.5" />
@@ -972,7 +964,7 @@ export default function LandingPage() {
               <div className="mt-3 border-t border-[#D4E6DE] pt-3">
                 <Link
                   href="/dashboard"
-                  className={`${headingFont.className} flex h-11 items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] text-sm font-semibold text-white`}
+                  className={`${headingFontClass} flex h-11 items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] text-sm font-semibold text-white`}
                   onClick={() => setMobileOpen(false)}
                 >
                   Open Workspace
@@ -994,7 +986,7 @@ export default function LandingPage() {
                 Episodic Memory · Grounded Market Research
               </div>
 
-              <h1 className={`${headingFont.className} mt-5 text-4xl font-bold leading-[1.06] text-[#0F2B23] sm:text-5xl lg:text-[3.8rem]`}>
+              <h1 className={`${headingFontClass} mt-5 text-4xl font-bold leading-[1.06] text-[#0F2B23] sm:text-5xl lg:text-[3.8rem]`}>
                 What happened the last time markets looked like this?
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-8 text-[#4D665D]">
@@ -1004,7 +996,7 @@ export default function LandingPage() {
               <div className="mt-8">
                 <Link
                   href="/dashboard"
-                  className={`${headingFont.className} inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] px-8 text-sm font-semibold text-white shadow-[0_16px_32px_-16px_rgba(15,167,122,0.85)] transition hover:brightness-95`}
+                  className={`${headingFontClass} inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] px-8 text-sm font-semibold text-white shadow-[0_16px_32px_-16px_rgba(15,167,122,0.85)] transition hover:brightness-95`}
                 >
                   Open Workspace
                   <ArrowRight className="h-4 w-4" />
@@ -1022,7 +1014,7 @@ export default function LandingPage() {
             </div>
 
             <div className="lg:pt-12">
-              <HeroRetrieval headingFont={headingFont.className} />
+              <HeroRetrieval headingFont={headingFontClass} />
             </div>
           </div>
         </section>
@@ -1040,13 +1032,13 @@ export default function LandingPage() {
         </div>
 
         {/* How it works */}
-        <WorkflowSection headingFont={headingFont.className} />
+        <WorkflowSection headingFont={headingFontClass} />
 
         {/* Research workspace */}
         <section id="product" className="border-y border-[#D6E8E0] bg-[#F8FCFA] py-20">
           <div className="mx-auto max-w-7xl px-5 md:px-8">
-            <p className={`${headingFont.className} text-xs font-semibold uppercase tracking-[0.12em] text-[#0A8A67]`}>The research workspace</p>
-            <h2 className={`${headingFont.className} mt-3 max-w-2xl text-3xl font-bold leading-tight text-[#0F2B23] md:text-4xl`}>
+            <p className={`${headingFontClass} text-xs font-semibold uppercase tracking-[0.12em] text-[#0A8A67]`}>The research workspace</p>
+            <h2 className={`${headingFontClass} mt-3 max-w-2xl text-3xl font-bold leading-tight text-[#0F2B23] md:text-4xl`}>
               Four tools. Every answer backed by real episodes.
             </h2>
             <p className="mt-4 max-w-xl text-base leading-7 text-[#4D665D]">
@@ -1071,7 +1063,7 @@ export default function LandingPage() {
                         <tab.icon className="h-4 w-4" />
                       </span>
                       <span>
-                        <span className={`${headingFont.className} block text-sm font-semibold ${active ? "text-[#0F2B23]" : "text-[#4D665D]"}`}>{tab.title}</span>
+                        <span className={`${headingFontClass} block text-sm font-semibold ${active ? "text-[#0F2B23]" : "text-[#4D665D]"}`}>{tab.title}</span>
                         <span className="mt-0.5 block text-xs leading-5 text-[#5A736A]">{tab.desc}</span>
                       </span>
                     </button>
@@ -1093,9 +1085,9 @@ export default function LandingPage() {
         {/* Features */}
         <section className="py-20">
           <div className="mx-auto max-w-7xl px-5 md:px-8">
-            <p className={`${headingFont.className} text-xs font-semibold uppercase tracking-[0.12em] text-[#0A8A67]`}>What makes it different</p>
+            <p className={`${headingFontClass} text-xs font-semibold uppercase tracking-[0.12em] text-[#0A8A67]`}>What makes it different</p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <h2 className={`${headingFont.className} max-w-xl text-3xl font-bold leading-tight text-[#0F2B23] md:text-4xl`}>
+              <h2 className={`${headingFontClass} max-w-xl text-3xl font-bold leading-tight text-[#0F2B23] md:text-4xl`}>
                 Not a chatbot. A research system built on real episodes.
               </h2>
               <p className="max-w-sm text-sm leading-7 text-[#5A736A]">
@@ -1118,7 +1110,7 @@ export default function LandingPage() {
                       >
                         {f.tag}
                       </span>
-                      <h3 className={`${headingFont.className} mt-3 text-xl font-bold text-[#0F2B23] md:text-2xl`}>{f.title}</h3>
+                      <h3 className={`${headingFontClass} mt-3 text-xl font-bold text-[#0F2B23] md:text-2xl`}>{f.title}</h3>
                       <p className="mt-3 max-w-lg text-sm leading-7 text-[#4D665D]">{f.body}</p>
                     </div>
                     <div className="shrink-0 flex items-center justify-center rounded-2xl border bg-white p-4 shadow-sm md:h-20 md:w-20" style={{ borderColor: f.accent + "30" }}>
@@ -1153,7 +1145,7 @@ export default function LandingPage() {
                       >
                         {f.tag}
                       </span>
-                      <h3 className={`${headingFont.className} text-sm font-bold leading-snug text-[#0F2B23]`}>{f.title}</h3>
+                      <h3 className={`${headingFontClass} text-sm font-bold leading-snug text-[#0F2B23]`}>{f.title}</h3>
                       <p className="mt-2.5 flex-1 text-sm leading-7 text-[#4D665D]">{f.body}</p>
                     </div>
                   </div>
@@ -1166,9 +1158,9 @@ export default function LandingPage() {
         {/* Comparison */}
         <section id="compare" className="border-y border-[#D6E8E0] bg-white py-20">
           <div className="mx-auto max-w-7xl px-5 md:px-8">
-            <p className={`${headingFont.className} text-xs font-semibold uppercase tracking-[0.12em] text-[#0A8A67]`}>Why retrieval-first</p>
+            <p className={`${headingFontClass} text-xs font-semibold uppercase tracking-[0.12em] text-[#0A8A67]`}>Why retrieval-first</p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <h2 className={`${headingFont.className} max-w-xl text-3xl font-bold leading-tight text-[#0F2B23] md:text-4xl`}>
+              <h2 className={`${headingFontClass} max-w-xl text-3xl font-bold leading-tight text-[#0F2B23] md:text-4xl`}>
                 FinMem vs ChatGPT vs a date-range lookup.
               </h2>
               <p className="max-w-xs text-sm leading-7 text-[#5A736A]">
@@ -1191,7 +1183,7 @@ export default function LandingPage() {
                   key={row.metric}
                   className="grid min-w-[680px] grid-cols-[1.3fr_1.2fr_1fr_1fr] border-b border-[#EEF5F2] last:border-0"
                 >
-                  <div className={`${headingFont.className} bg-[#FAFCFB] px-5 py-4 text-sm font-semibold text-[#173F33]`}>{row.metric}</div>
+                  <div className={`${headingFontClass} bg-[#FAFCFB] px-5 py-4 text-sm font-semibold text-[#173F33]`}>{row.metric}</div>
                   {/* FinMem cell — always highlighted */}
                   <div className={`flex items-start gap-2 px-5 py-4 ${i % 2 === 0 ? "bg-[#F2FAF6]" : "bg-[#F8FCFA]"}`}>
                     <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
@@ -1231,9 +1223,9 @@ export default function LandingPage() {
         {/* Who it's for */}
         <section className="py-20">
           <div className="mx-auto max-w-7xl px-5 md:px-8">
-            <p className={`${headingFont.className} text-xs font-semibold uppercase tracking-[0.12em] text-[#0A8A67]`}>Who it&apos;s for</p>
+            <p className={`${headingFontClass} text-xs font-semibold uppercase tracking-[0.12em] text-[#0A8A67]`}>Who it&apos;s for</p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <h2 className={`${headingFont.className} max-w-xl text-3xl font-bold leading-tight text-[#0F2B23] md:text-4xl`}>
+              <h2 className={`${headingFontClass} max-w-xl text-3xl font-bold leading-tight text-[#0F2B23] md:text-4xl`}>
                 If you&apos;ve ever asked &ldquo;has the market been here before?&rdquo;
               </h2>
               <p className="max-w-xs text-sm leading-7 text-[#5A736A]">
@@ -1263,7 +1255,7 @@ export default function LandingPage() {
                         >
                           {p.tag}
                         </span>
-                        <h3 className={`${headingFont.className} text-sm font-bold text-[#0F2B23]`}>{p.title}</h3>
+                        <h3 className={`${headingFontClass} text-sm font-bold text-[#0F2B23]`}>{p.title}</h3>
                       </div>
                     </div>
                     <div className="mt-4 rounded-lg border border-[#EEF5F2] bg-[#FAFCFB] px-3.5 py-3">
@@ -1282,8 +1274,8 @@ export default function LandingPage() {
         <section id="faq" className="border-y border-[#D6E8E0] bg-[#F8FCFA] py-20">
           <div className="mx-auto grid max-w-7xl gap-10 px-5 md:px-8 lg:grid-cols-[300px_1fr]">
             <div>
-              <p className={`${headingFont.className} text-xs font-semibold uppercase tracking-[0.12em] text-[#0A8A67]`}>FAQ</p>
-              <h2 className={`${headingFont.className} mt-3 text-3xl font-bold leading-tight text-[#0F2B23]`}>
+              <p className={`${headingFontClass} text-xs font-semibold uppercase tracking-[0.12em] text-[#0A8A67]`}>FAQ</p>
+              <h2 className={`${headingFontClass} mt-3 text-3xl font-bold leading-tight text-[#0F2B23]`}>
                 Questions about FinMem.
               </h2>
               <p className="mt-4 text-sm leading-7 text-[#4D665D]">
@@ -1301,8 +1293,8 @@ export default function LandingPage() {
         {/* CTA */}
         <section className="py-20">
           <div className="mx-auto max-w-3xl px-5 text-center md:px-8">
-            <p className={`${headingFont.className} text-xs font-semibold uppercase tracking-[0.12em] text-[#0A8A67]`}>Get started</p>
-            <h2 className={`${headingFont.className} mt-4 text-3xl font-bold leading-tight text-[#0F2B23] md:text-4xl`}>
+            <p className={`${headingFontClass} text-xs font-semibold uppercase tracking-[0.12em] text-[#0A8A67]`}>Get started</p>
+            <h2 className={`${headingFontClass} mt-4 text-3xl font-bold leading-tight text-[#0F2B23] md:text-4xl`}>
               See what history says about today's market.
             </h2>
             <p className="mx-auto mt-4 max-w-lg text-base leading-7 text-[#4D665D]">
@@ -1311,7 +1303,7 @@ export default function LandingPage() {
             <div className="mt-8 flex justify-center">
               <Link
                 href="/dashboard"
-                className={`${headingFont.className} inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] px-10 text-sm font-semibold text-white shadow-[0_18px_36px_-18px_rgba(15,167,122,0.85)] transition hover:brightness-95`}
+                className={`${headingFontClass} inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] px-10 text-sm font-semibold text-white shadow-[0_18px_36px_-18px_rgba(15,167,122,0.85)] transition hover:brightness-95`}
               >
                 Open Workspace
                 <ArrowRight className="h-4 w-4" />
@@ -1329,14 +1321,14 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-5 py-12 md:px-8">
           <div className="flex flex-col gap-8 md:flex-row md:justify-between">
             <div className="max-w-xs">
-              <span className={`${headingFont.className} text-xl font-bold text-[#0F2B23]`}>FinMem</span>
+              <span className={`${headingFontClass} text-xl font-bold text-[#0F2B23]`}>FinMem</span>
               <p className="mt-3 text-sm leading-7 text-[#5A736A]">
                 Episodic market memory for financial analysts. Cited historical analogs, confidence-aware answers, and a full research workspace.
               </p>
               <div className="mt-4">
                 <Link
                   href="/dashboard"
-                  className={`${headingFont.className} inline-flex h-9 items-center gap-1.5 rounded-lg bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] px-4 text-xs font-semibold text-white hover:brightness-95`}
+                  className={`${headingFontClass} inline-flex h-9 items-center gap-1.5 rounded-lg bg-[linear-gradient(135deg,#0FA77A,#1AADB0)] px-4 text-xs font-semibold text-white hover:brightness-95`}
                 >
                   Open Workspace
                   <ArrowRight className="h-3 w-3" />
@@ -1346,7 +1338,7 @@ export default function LandingPage() {
 
             <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
               <div>
-                <p className={`${headingFont.className} text-[10px] font-semibold uppercase tracking-[0.14em] text-[#0A8A67]`}>Product</p>
+                <p className={`${headingFontClass} text-[10px] font-semibold uppercase tracking-[0.14em] text-[#0A8A67]`}>Product</p>
                 <ul className="mt-3 space-y-2">
                   {[
                     { label: "How it works", href: "#workflow" },
@@ -1361,7 +1353,7 @@ export default function LandingPage() {
                 </ul>
               </div>
               <div>
-                <p className={`${headingFont.className} text-[10px] font-semibold uppercase tracking-[0.14em] text-[#0A8A67]`}>Workspace</p>
+                <p className={`${headingFontClass} text-[10px] font-semibold uppercase tracking-[0.14em] text-[#0A8A67]`}>Workspace</p>
                 <ul className="mt-3 space-y-2">
                   {[
                     { label: "Dashboard", href: "/dashboard" },
@@ -1377,7 +1369,7 @@ export default function LandingPage() {
                 </ul>
               </div>
               <div>
-                <p className={`${headingFont.className} text-[10px] font-semibold uppercase tracking-[0.14em] text-[#0A8A67]`}>Data</p>
+                <p className={`${headingFontClass} text-[10px] font-semibold uppercase tracking-[0.14em] text-[#0A8A67]`}>Data</p>
                 <ul className="mt-3 space-y-2">
                   {["yfinance", "FRED", "LanceDB", "PostgreSQL"].map((s) => (
                     <li key={s} className="text-sm text-[#4D665D]">{s}</li>
@@ -1392,7 +1384,7 @@ export default function LandingPage() {
               © {new Date().getFullYear()} FinMem. Historical analogs are research context only, not financial advice.
             </p>
             <div className="flex gap-3 text-xs text-[#5A736A]">
-              <Link href="/auth" className="hover:text-[#0F2B23]">Sign In</Link>
+              <Link href="/dashboard" className="hover:text-[#0F2B23]">Sign In</Link>
               <Link href="/dashboard" className="hover:text-[#0F2B23]">Guest Access</Link>
             </div>
           </div>

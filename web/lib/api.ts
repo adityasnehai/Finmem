@@ -1,6 +1,8 @@
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-const TIMEOUT_MS = 15_000;
+// Cold starts on the backend can take longer than a typical page fetch,
+// especially if the API is warming cached market data.
+const TIMEOUT_MS = 45_000;
 
 async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();

@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { fetchState, fetchMemory, fetchDataQuality } from "@/lib/api";
-import { REGIME_COLORS, regimeColor, regimeLabel } from "@/lib/constants";
+import { API } from "@/lib/api";
+import { regimeColor, regimeLabel } from "@/lib/constants";
 import {
   PieChart,
   Pie,
@@ -51,38 +51,158 @@ interface QualityData {
   last_updated: string;
 }
 
+const DASHBOARD_TIMEOUT_MS = 120_000;
+const DASHBOARD_CACHE_KEY = "finmem_dashboard_cache_v1";
+
+type DashboardCache = {
+  state: StateData | null;
+  memory: MemoryData | null;
+  quality: QualityData | null;
+  updatedAt: string;
+};
+
+function loadDashboardCache(): DashboardCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(DASHBOARD_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as DashboardCache;
+  } catch {
+    return null;
+  }
+}
+
+function saveDashboardCache(cache: DashboardCache) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Ignore storage quota / privacy mode failures.
+  }
+}
+
+async function fetchJsonWithRetry<T>(path: string, attempts = 3): Promise<T> {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), DASHBOARD_TIMEOUT_MS);
+
+    try {
+      const res = await fetch(`${API}${path}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} for ${path}`);
+      }
+
+      return await res.json();
+    } catch (err) {
+      lastError = err;
+      if (attempt < attempts) {
+        await new Promise((resolve) => window.setTimeout(resolve, 750 * attempt));
+      }
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(`Failed to load ${path}`);
+}
+
 export default function Dashboard() {
   const [state, setState] = useState<StateData | null>(null);
   const [memory, setMemory] = useState<MemoryData | null>(null);
   const [quality, setQuality] = useState<QualityData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const didLoad = useRef(false);
+  const [stateLoading, setStateLoading] = useState(true);
+  const [memoryLoading, setMemoryLoading] = useState(true);
+  const [qualityLoading, setQualityLoading] = useState(true);
+  const [stateError, setStateError] = useState<string | null>(null);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+  const [qualityError, setQualityError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const persistCache = useCallback(
+    (updates: Partial<DashboardCache>) => {
+      const existing = loadDashboardCache();
+      const next: DashboardCache = {
+        state: updates.state ?? existing?.state ?? state,
+        memory: updates.memory ?? existing?.memory ?? memory,
+        quality: updates.quality ?? existing?.quality ?? quality,
+        updatedAt: new Date().toISOString(),
+      };
+      saveDashboardCache(next);
+    },
+    [memory, quality, state],
+  );
+
+  const loadState = useCallback(async () => {
+    setStateLoading(true);
+    setStateError(null);
     try {
-      const [stateData, memData, qualityData] = await Promise.all([
-        fetchState(),
-        fetchMemory(),
-        fetchDataQuality(),
-      ]);
-      setState(stateData.state || stateData);
-      setMemory(memData);
-      setQuality(qualityData);
+      const value = await fetchJsonWithRetry<{ state: StateData } | StateData>("/api/state");
+      const normalized = value as { state?: StateData } & StateData;
+      const nextState = normalized.state || normalized;
+      setState(nextState);
+      persistCache({ state: nextState });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load dashboard");
+      setState(null);
+      setStateError(err instanceof Error ? err.message : "Failed to load market state");
     } finally {
-      setLoading(false);
+      setStateLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    if (!didLoad.current) {
-      didLoad.current = true;
-      refresh();
+  const loadMemory = useCallback(async () => {
+    setMemoryLoading(true);
+    setMemoryError(null);
+    try {
+      const value = await fetchJsonWithRetry<MemoryData>("/api/memory");
+      setMemory(value);
+      persistCache({ memory: value });
+    } catch (err) {
+      setMemory(null);
+      setMemoryError(err instanceof Error ? err.message : "Failed to load episode memory");
+    } finally {
+      setMemoryLoading(false);
     }
+  }, []);
+
+  const loadQuality = useCallback(async () => {
+    setQualityLoading(true);
+    setQualityError(null);
+    try {
+      const value = await fetchJsonWithRetry<QualityData>("/api/data-quality");
+      setQuality(value);
+      persistCache({ quality: value });
+    } catch (err) {
+      setQuality(null);
+      setQualityError(err instanceof Error ? err.message : "Failed to load data quality");
+    } finally {
+      setQualityLoading(false);
+    }
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.allSettled([loadState(), loadMemory(), loadQuality()]);
+    setRefreshing(false);
+  }, [loadMemory, loadQuality, loadState]);
+
+  useEffect(() => {
+    const cached = loadDashboardCache();
+    if (cached) {
+      if (cached.state) setState(cached.state);
+      if (cached.memory) setMemory(cached.memory);
+      if (cached.quality) setQuality(cached.quality);
+    }
+    void refresh();
   }, [refresh]);
+
+  const warmingUp = stateLoading || memoryLoading || qualityLoading;
+  const hasCachedData = Boolean(state || memory || quality);
 
   const regimeData = memory?.regimes
     ? Object.entries(memory.regimes)
@@ -101,13 +221,18 @@ export default function Dashboard() {
         subtitle="Research system overview and live market context."
         asOf={state?.date}
         onRefresh={refresh}
-        loading={loading}
+        loading={refreshing}
       />
 
       <div className="flex-1 overflow-y-auto px-6 py-6 md:px-8 md:py-8">
-        {error && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
+        {(stateError || memoryError || qualityError) && (
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Some dashboard panels are still loading or unavailable. Refreshing will retry them automatically.
+          </div>
+        )}
+        {warmingUp && (
+          <div className="mb-6 rounded-lg border border-[#BCE8DA] bg-[#E9F9F3] px-4 py-3 text-sm text-[#0A8A67]">
+            Dashboard warming up. Showing cached data where available while live market data loads.
           </div>
         )}
         <div className="mx-auto flex max-w-7xl flex-col gap-8">
@@ -116,8 +241,14 @@ export default function Dashboard() {
             label="Current market state"
             description="Today's price, volatility, inflation, policy, and curve signals."
           >
-            {loading && !state ? (
-              <MetricGridSkeleton count={5} />
+            {stateLoading && !state ? (
+              hasCachedData ? (
+                <div className="rounded-xl border border-dashed border-[#D7E8E0] bg-white px-6 py-8 text-sm text-[#5A736A]">
+                  Live market data is still loading. Cached dashboard values will appear here once available.
+                </div>
+              ) : (
+                <MetricGridSkeleton count={5} />
+              )
             ) : state ? (
               <>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -173,7 +304,7 @@ export default function Dashboard() {
                 </div>
               </>
             ) : (
-              <EmptyState text="No market state available right now." />
+              <EmptyState text={stateError ?? "No market state available right now."} />
             )}
           </Section>
 
@@ -184,12 +315,18 @@ export default function Dashboard() {
               description="Data freshness, completeness, and research readiness."
               compact
             >
-              {loading && !quality ? (
-                <div className="space-y-3">
-                  <div className="skeleton h-24 rounded-xl" />
-                  <div className="skeleton h-24 rounded-xl" />
-                  <div className="skeleton h-24 rounded-xl" />
-                </div>
+              {qualityLoading && !quality ? (
+                hasCachedData ? (
+                  <div className="rounded-xl border border-dashed border-[#D7E8E0] bg-white px-6 py-8 text-sm text-[#5A736A]">
+                    Data quality is warming up. Cached health metrics will appear once loaded.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="skeleton h-24 rounded-xl" />
+                    <div className="skeleton h-24 rounded-xl" />
+                    <div className="skeleton h-24 rounded-xl" />
+                  </div>
+                )
               ) : quality ? (
                 <div className="rounded-xl border border-[#D7E8E0] bg-white shadow-[0_18px_40px_-32px_rgba(12,58,44,0.26)] divide-y divide-[#EEF5F2]">
                   <HealthRow
@@ -215,7 +352,7 @@ export default function Dashboard() {
                   />
                 </div>
               ) : (
-                <EmptyState text="No system health data." />
+                <EmptyState text={qualityError ?? "No system health data."} />
               )}
             </Section>
 
@@ -224,8 +361,14 @@ export default function Dashboard() {
               description="Breakdown of historical episodes by detected market regime."
               compact
             >
-              {loading && !memory ? (
-                <div className="skeleton h-[280px] rounded-xl" />
+              {memoryLoading && !memory ? (
+                hasCachedData ? (
+                  <div className="rounded-xl border border-dashed border-[#D7E8E0] bg-white px-6 py-8 text-sm text-[#5A736A]">
+                    Episode memory is warming up. Cached regime counts will appear once loaded.
+                  </div>
+                ) : (
+                  <div className="skeleton h-[280px] rounded-xl" />
+                )
               ) : regimeData.length ? (
                 <div className="grid gap-6 rounded-xl border border-[#D7E8E0] bg-white p-5 shadow-[0_18px_45px_-30px_rgba(12,58,44,0.26)] md:grid-cols-[1fr_1fr]">
                   <ResponsiveContainer width="100%" height={240}>
@@ -276,7 +419,7 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : (
-                <EmptyState text="No episodes detected yet." />
+                <EmptyState text={memoryError ?? "No episodes detected yet."} />
               )}
             </Section>
           </div>
